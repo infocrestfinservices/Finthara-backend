@@ -30,6 +30,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
+from config import settings
+
 logger = logging.getLogger(__name__)
 
 # reports: how many PROJECTS may be generated; None means unlimited.
@@ -124,6 +126,8 @@ def entitlements(db, user) -> dict:
 def may_generate(db, user, project_id=None) -> tuple[bool, str]:
     """(allowed, why not). A project that has already been generated is always allowed
     through — that is a regeneration of something already paid for, not a new report."""
+    if settings.UNLOCK_ALL:
+        return True, ""
     plan = effective_plan(user)
     limit = plan_spec(plan)["reports"]
     if limit is None:
@@ -143,6 +147,8 @@ def may_generate(db, user, project_id=None) -> tuple[bool, str]:
 
 def may_export(user, kind: str) -> tuple[bool, str]:
     """(allowed, why not) for a download format: 'pdf', 'word' or 'excel'."""
+    if settings.UNLOCK_ALL:
+        return True, ""
     plan = effective_plan(user)
     spec = plan_spec(plan)
     if kind in spec["exports"]:

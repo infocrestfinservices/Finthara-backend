@@ -107,6 +107,12 @@ class Settings(BaseSettings):
     DOCS_USER: str = "admin"
     DOCS_PASSWORD: str = ""
 
+    # Beta/testing switch: when true, every account gets full report + export access,
+    # bypassing the plan limits in services/entitlements.py entirely — no paywall for
+    # anyone, not just one email. Set UNLOCK_ALL=false (or unset it) before real launch,
+    # once payments are meant to actually gate anything.
+    UNLOCK_ALL: bool = False
+
     RAZORPAY_KEY_ID: str = ""
     RAZORPAY_KEY_SECRET: str = ""
     # Set in the Razorpay dashboard when the webhook URL is registered. It is NOT the key
