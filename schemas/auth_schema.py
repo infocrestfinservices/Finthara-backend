@@ -26,6 +26,17 @@ class TokenResponse(BaseModel):
     user_id: int
     email: str
     full_name: Optional[str] = None
+    requires_2fa: bool = False
+
+
+class TwoFactorChallengeResponse(BaseModel):
+    requires_2fa: bool = True
+    challenge_token: str
+
+
+class TwoFactorLoginRequest(BaseModel):
+    challenge_token: str
+    code: str
 
 
 class UserResponse(BaseModel):
@@ -34,6 +45,8 @@ class UserResponse(BaseModel):
     full_name: Optional[str] = None
     plan: Optional[str] = None
     is_admin: bool = False
+    theme_preference: str = "system"
+    avatar_url: Optional[str] = None
 
     class Config:
         from_attributes = True

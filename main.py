@@ -6,7 +6,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from config import settings
-from database import Base, engine  # Auto-table creation import
+from database import Base, engine, ensure_columns  # Auto-table creation import
 
 from routers.industry_router import router as industry_router
 from routers.country_router import router as country_router
@@ -21,12 +21,30 @@ from routers.bank_loan_router import router as bank_loan_router
 from routers.payment_router import router as payment_router
 from routers.admin_router import router as admin_router
 from routers.invoice_router import router as invoice_router
+from routers.profile_router import router as profile_router
 from routers.engine_test_router import router as engine_test_router  # dev only
 
 IS_PRODUCTION = settings.ENV.strip().lower() == "production"
 
 # Create all database tables on startup (Neon / Supabase Fix)
 Base.metadata.create_all(bind=engine)
+
+# Columns added to models after their table already existed — create_all above never alters
+# an existing table, so these need an explicit ALTER TABLE. See database.ensure_columns.
+ensure_columns("users", {
+    "phone": "VARCHAR",
+    "avatar_url": "VARCHAR",
+    "theme_preference": "VARCHAR NOT NULL DEFAULT 'system'",
+    "notify_email": "BOOLEAN NOT NULL DEFAULT true",
+    "pending_email": "VARCHAR",
+    "pending_email_otp": "VARCHAR",
+    "pending_email_otp_expires_at": "TIMESTAMP",
+    "totp_secret": "VARCHAR",
+    "totp_enabled": "BOOLEAN NOT NULL DEFAULT false",
+    "totp_backup_codes": "VARCHAR",
+    "is_deleted": "BOOLEAN NOT NULL DEFAULT false",
+    "deleted_at": "TIMESTAMP",
+})
 
 app = FastAPI(
     title="AI Feasibility Study & Project Report Generator",
@@ -68,6 +86,7 @@ app.include_router(bank_loan_router)
 app.include_router(payment_router)
 app.include_router(admin_router)
 app.include_router(invoice_router)
+app.include_router(profile_router)
 
 if not IS_PRODUCTION:
     app.include_router(engine_test_router)
