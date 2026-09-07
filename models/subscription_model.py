@@ -50,23 +50,35 @@ class Subscription(Base):
 
 
 class WebhookEvent(Base):
-    """Every webhook Razorpay has delivered, by their event id.
+    """Every webhook Razorpay or PayPal has delivered, by their event id.
 
-    Razorpay retries a webhook until it gets a 2xx, so the same event WILL arrive more than
-    once — and a duplicate `subscription.charged` that is processed twice extends a paid-up
-    period the customer did not pay for. Recording the id and refusing to act on one already
-    seen is what makes the handler safe to retry, which is the whole contract a webhook
-    endpoint signs up to.
+    Both providers retry a webhook until they get a 2xx, so the same event WILL arrive more
+    than once — and a duplicate `subscription.charged` or `PAYMENT.CAPTURE.COMPLETED`
+    processed twice extends a paid-up period, or double-fulfils an order, that the customer
+    did not pay for twice. Recording the id and refusing to act on one already seen is what
+    makes the handler safe to retry, which is the whole contract a webhook endpoint signs up
+    to. `gateway` disambiguates the two id spaces — a collision between a Razorpay event id
+    and a PayPal one is astronomically unlikely, but there's no reason to rely on that.
 
-    The body is kept because when a subscription ends up in a state nobody expected, the only
-    account of what actually arrived is this table.
+    The body is kept because when a subscription or payment ends up in a state nobody
+    expected, the only account of what actually arrived is this table.
     """
     __tablename__ = "webhook_events"
+    # Left as a single-column constraint on event_id (not (gateway, event_id)) deliberately:
+    # this project has no Alembic (see grant_admin.py) and database.ensure_columns() only
+    # ever ADDs columns, so an existing deployed table would keep the OLD constraint
+    # regardless of what's declared here. A Razorpay event id and a PayPal one colliding is
+    # astronomically unlikely — different id formats entirely — so the narrower constraint
+    # already deployed is stricter than needed, not wrong, and every dedup check in code
+    # filters on (gateway, event_id) anyway.
     __table_args__ = (UniqueConstraint("event_id", name="uq_webhook_event_id"),)
 
     id = Column(Integer, primary_key=True, index=True)
-    event_id = Column(String, nullable=False, index=True)      # x-razorpay-event-id header
-    event = Column(String, nullable=True, index=True)          # e.g. subscription.charged
+    gateway = Column(String, nullable=False, default="razorpay", index=True)
+    event_id = Column(String, nullable=False, index=True)      # x-razorpay-event-id header,
+                                                                # or PayPal's event `id`
+    event = Column(String, nullable=True, index=True)          # e.g. subscription.charged,
+                                                                # or PAYMENT.CAPTURE.COMPLETED
     payload = Column(String, nullable=True)
     handled = Column(Boolean, default=False)
     note = Column(String, nullable=True)

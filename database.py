@@ -55,3 +55,29 @@ def ensure_columns(table: str, columns: dict[str, str]) -> None:
         for name, ddl in columns.items():
             con.execute(text(f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS "{name}" {ddl}'))
         con.commit()
+
+
+def ensure_index(name: str, table: str, column: str, unique: bool = False) -> None:
+    """CREATE [UNIQUE] INDEX IF NOT EXISTS — for an index a column needs only after it was
+    added by ensure_columns() above, which has no way to declare one itself."""
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import text
+    kind = "UNIQUE INDEX" if unique else "INDEX"
+    with engine.connect() as con:
+        con.execute(text(f'CREATE {kind} IF NOT EXISTS "{name}" ON "{table}" ("{column}")'))
+        con.commit()
+
+
+def ensure_nullable(table: str, *columns: str) -> None:
+    """Drop a NOT NULL constraint a column was originally created with — for a column whose
+    model declaration has since changed to nullable=True (payments.razorpay_order_id, once a
+    PayPal row could have no Razorpay order at all). Safe to run every startup: dropping a
+    constraint that is already gone is a no-op, not an error."""
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import text
+    with engine.connect() as con:
+        for name in columns:
+            con.execute(text(f'ALTER TABLE "{table}" ALTER COLUMN "{name}" DROP NOT NULL'))
+        con.commit()

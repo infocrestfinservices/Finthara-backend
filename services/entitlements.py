@@ -40,19 +40,19 @@ logger = logging.getLogger(__name__)
 #              must be paid again, after which the user falls back to `free`.
 PLANS = {
     "free": {
-        "label": "Free", "amount": 0, "period": "free", "period_days": None,
+        "label": "Free", "amount": 0, "usd_amount": 0, "period": "free", "period_days": None,
         "reports": 1, "exports": {"pdf"},
     },
     "starter": {
-        "label": "Starter", "amount": 499, "period": "one-time", "period_days": None,
+        "label": "Starter", "amount": 499, "usd_amount": 6, "period": "one-time", "period_days": None,
         "reports": 3, "exports": {"pdf"},
     },
     "professional": {
-        "label": "Professional", "amount": 1499, "period": "monthly", "period_days": 30,
+        "label": "Professional", "amount": 1499, "usd_amount": 149, "period": "monthly", "period_days": 30,
         "reports": None, "exports": {"pdf", "word", "excel"},
     },
     "enterprise": {
-        "label": "Enterprise", "amount": 4999, "period": "monthly", "period_days": 30,
+        "label": "Enterprise", "amount": 4999, "usd_amount": 499, "period": "monthly", "period_days": 30,
         "reports": None, "exports": {"pdf", "word", "excel"},
     },
 }

@@ -125,6 +125,34 @@ class Settings(BaseSettings):
     def payments_enabled(self) -> bool:
         return bool(self.RAZORPAY_KEY_ID.strip() and self.RAZORPAY_KEY_SECRET.strip())
 
+    # ── PayPal ──────────────────────────────────────────────────────────────────
+    # The public id the browser SDK loads with — safe to expose, and returned in the
+    # create-order response so the frontend never has to keep its own copy in sync.
+    PAYPAL_CLIENT_ID: str = ""
+    # Server-side only, used to fetch OAuth access tokens. Never sent to the browser.
+    PAYPAL_CLIENT_SECRET: str = ""
+    # "sandbox" or "live" — picks the API host AND which of the two credential pairs above
+    # is valid. Sandbox keys against the live host (or vice versa) fail auth outright, which
+    # is the safe failure: it cannot silently charge a live card with a test integration.
+    PAYPAL_ENV: str = "sandbox"
+    # The webhook's id from the PayPal dashboard (WH-...) — NOT a secret. It is one of the
+    # inputs to /v1/notifications/verify-webhook-signature, which is what actually proves a
+    # delivery came from PayPal; an empty value here means every webhook is rejected, the same
+    # fail-closed default the Razorpay webhook secret has.
+    PAYPAL_WEBHOOK_ID: str = ""
+    PAYPAL_CURRENCY: str = "USD"
+    # Shown on PayPal's own approval/review screen and on the buyer's card/bank statement.
+    PAYPAL_BRAND_NAME: str = "ReportCraft AI"
+
+    @property
+    def paypal_enabled(self) -> bool:
+        return bool(self.PAYPAL_CLIENT_ID.strip() and self.PAYPAL_CLIENT_SECRET.strip())
+
+    @property
+    def paypal_api_base(self) -> str:
+        return ("https://api-m.paypal.com" if self.PAYPAL_ENV.strip().lower() == "live"
+                else "https://api-m.sandbox.paypal.com")
+
     @property
     def cors_origins(self) -> list[str]:
         """The origins to allow, or ["*"] when none are configured.

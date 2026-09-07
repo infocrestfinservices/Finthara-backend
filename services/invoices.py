@@ -124,7 +124,8 @@ def for_payment(db, payment):
                    plan=payment.plan, gross=float(payment.amount or 0),
                    discount=float(payment.discount or 0),
                    coupon_code=payment.coupon_code,
-                   issued_at=issued, period_start=issued, period_end=period_end)
+                   issued_at=issued, period_start=issued, period_end=period_end,
+                   currency=payment.currency or "INR")
 
 
 def for_subscription_charge(db, subscription, amount: float):
@@ -152,7 +153,7 @@ def for_subscription_charge(db, subscription, amount: float):
 
 
 def _create(db, *, user, payment, subscription, plan, gross, discount, coupon_code,
-            issued_at, period_start, period_end, description_suffix=""):
+            issued_at, period_start, period_end, description_suffix="", currency="INR"):
     from models.invoice_model import Invoice
 
     money = split_amount(gross)
@@ -172,7 +173,7 @@ def _create(db, *, user, payment, subscription, plan, gross, discount, coupon_co
             description=_describe(plan, period_start, period_end) + description_suffix,
             period_start=period_start, period_end=period_end,
             sac_code=(settings.SAC_CODE if is_gst_registered() else None),
-            currency="INR",
+            currency=currency,
             gross=round(float(gross), 2), discount=round(float(discount or 0), 2),
             coupon_code=coupon_code,
             amount_paid=round(float(gross), 2), amount_due=0.0,

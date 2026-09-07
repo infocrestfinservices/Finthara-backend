@@ -6,7 +6,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from config import settings
-from database import Base, engine, ensure_columns  # Auto-table creation import
+from database import Base, engine, ensure_columns, ensure_nullable, ensure_index  # Auto-table creation import
 
 from routers.industry_router import router as industry_router
 from routers.country_router import router as country_router
@@ -19,6 +19,7 @@ from routers.generation_router import router as generation_router
 from routers.templates_router import router as templates_router
 from routers.bank_loan_router import router as bank_loan_router
 from routers.payment_router import router as payment_router
+from routers.paypal_router import router as paypal_router
 from routers.admin_router import router as admin_router
 from routers.invoice_router import router as invoice_router
 from routers.profile_router import router as profile_router
@@ -45,6 +46,19 @@ ensure_columns("users", {
     "is_deleted": "BOOLEAN NOT NULL DEFAULT false",
     "deleted_at": "TIMESTAMP",
 })
+ensure_columns("payments", {
+    "gateway": "VARCHAR NOT NULL DEFAULT 'razorpay'",
+    "paypal_order_id": "VARCHAR",
+    "paypal_capture_id": "VARCHAR",
+})
+# razorpay_order_id was NOT NULL when every payment was a Razorpay payment; a PayPal row has
+# no Razorpay order at all. See models/payment_model.py.
+ensure_nullable("payments", "razorpay_order_id")
+ensure_index("ix_payments_paypal_order_id", "payments", "paypal_order_id", unique=True)
+ensure_columns("webhook_events", {
+    "gateway": "VARCHAR NOT NULL DEFAULT 'razorpay'",
+})
+ensure_index("ix_webhook_events_gateway", "webhook_events", "gateway")
 
 app = FastAPI(
     title="AI Feasibility Study & Project Report Generator",
@@ -84,6 +98,7 @@ app.include_router(generation_router)
 app.include_router(templates_router)
 app.include_router(bank_loan_router)
 app.include_router(payment_router)
+app.include_router(paypal_router)
 app.include_router(admin_router)
 app.include_router(invoice_router)
 app.include_router(profile_router)
