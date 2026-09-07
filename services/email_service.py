@@ -4,6 +4,12 @@ from config import settings
 
 RESEND_ENDPOINT = "https://api.resend.com/emails"
 
+# Sync, unlike everything above it: this is called from payment_router.py and
+# paypal_router.py, which are plain `def` endpoints (the Razorpay/PayPal SDK calls in them
+# are sync too), not `async def` like auth_router.py. A plain httpx.post avoids needing an
+# event loop inside a sync request handler.
+_RESEND_TIMEOUT = 15.0
+
 
 def email_configured() -> bool:
     """True when an email provider (Resend) is set up.
@@ -118,3 +124,61 @@ async def send_password_reset_email(email: str, full_name: str, link: str,
         r = await client.post(RESEND_ENDPOINT, json=payload, headers=headers)
         r.raise_for_status()
     return True
+
+
+def _purchase_email_text(full_name: str, invoice_number: str, plan_label: str,
+                         amount: float, currency: str, discount: float) -> str:
+    name = full_name or "there"
+    lines = [
+        f"Hi {name},",
+        "",
+        f"Thanks for your payment — your {plan_label} plan is now active.",
+        "",
+        f"Invoice: {invoice_number}",
+        f"Amount paid: {currency} {amount:,.2f}",
+    ]
+    if discount:
+        lines.append(f"Discount applied: {currency} {discount:,.2f}")
+    lines += [
+        "",
+        f"This invoice, and every one before it, is available any time under Billing "
+        f"History: {settings.FRONTEND_URL.rstrip('/')}/account",
+        "",
+        f"Questions about this charge? Reply to this email or write to "
+        f"{settings.COMPANY_EMAIL or settings.FROM_EMAIL}.",
+        "",
+        f"— {settings.FROM_NAME}",
+    ]
+    return "\n".join(lines)
+
+
+def send_plan_purchase_email(email: str, full_name: str, *, invoice_number: str,
+                             plan_label: str, amount: float, currency: str,
+                             discount: float = 0.0) -> None:
+    """A plain-text receipt: which invoice number, what was paid, where to find every past
+    one. No PDF attached — the same information plus the downloadable PDF is already sitting
+    under Billing History, so attaching it here would just be a second copy to keep in sync.
+
+    Sync (see the note above the imports) and, like the OTP email, a no-op when email is not
+    configured — a missing SMTP/Resend setup on a dev box must not turn a successful payment
+    into an error, which is also why the CALLER wraps this in try/except and only logs a
+    failure rather than letting it interrupt anything.
+    """
+    if not email_configured():
+        return
+
+    payload = {
+        "from": f"{settings.FROM_NAME} <{settings.FROM_EMAIL}>",
+        "to": [email],
+        "subject": f"Your {settings.FROM_NAME} invoice {invoice_number}",
+        "text": _purchase_email_text(full_name, invoice_number, plan_label, amount,
+                                     currency, discount),
+    }
+    headers = {
+        "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    response = httpx.post(RESEND_ENDPOINT, json=payload, headers=headers,
+                          timeout=_RESEND_TIMEOUT)
+    if response.status_code >= 400:
+        raise RuntimeError(f"Resend API returned {response.status_code}: {response.text}")

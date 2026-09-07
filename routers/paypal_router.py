@@ -33,6 +33,7 @@ from models.subscription_model import WebhookEvent
 from models.user_model import User
 from services.entitlements import PLANS, can_purchase, grant_plan
 from services import paypal_gateway as gw
+from services.email_service import send_plan_purchase_email
 
 logger = logging.getLogger("paypal")
 router = APIRouter(prefix="/paypal", tags=["PayPal"])
@@ -154,11 +155,22 @@ def _finalize_capture(db: Session, payment: Payment, order_id: str) -> str:
     grant_plan(payment.user, payment.plan)
     db.commit()
 
+    invoice = None
     try:
         from services import invoices as invoice_service
-        invoice_service.for_payment(db, payment)
+        invoice = invoice_service.for_payment(db, payment)
     except Exception:
         logger.exception("paypal: invoice could not be issued for payment %s", payment.id)
+
+    try:
+        send_plan_purchase_email(
+            payment.user.email, payment.user.full_name,
+            invoice_number=(invoice.invoice_number if invoice else f"payment-{payment.id}"),
+            plan_label=PLANS.get(payment.plan, {}).get("label", payment.plan),
+            amount=float(payment.amount or 0), currency=payment.currency or "USD",
+            discount=float(payment.discount or 0))
+    except Exception:
+        logger.exception("paypal: purchase email could not be sent for payment %s", payment.id)
 
     logger.info("paypal: order %s PAID by user %s — plan is now %s (expires %s)",
                order_id, payment.user_id, payment.plan,

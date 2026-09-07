@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from dependencies import get_admin_user
+from models.invoice_model import Invoice
 from models.payment_model import Payment
 from models.project_model import Project
 from models.report_model import Report
@@ -572,3 +573,100 @@ def repeat_buyers(db: Session = Depends(get_db)):
         "total": float(r.total or 0),
         "last_paid_at": r.last.isoformat() if r.last else None,
     } for r in rows]}
+
+
+# ── invoices ───────────────────────────────────────────────────────────────────
+# Grouped by BUYER rather than one flat list, on purpose: support looking up a customer wants
+# everything that customer has ever paid in one place, and a flat list ordered by date scatters
+# one buyer's five invoices through however many other people paid in between.
+
+MAX_INVOICES_SCANNED = 5000   # a bound on the underlying query, not on what a buyer sees
+
+
+def _payment_reference(payment: Payment | None) -> str:
+    if not payment:
+        return "—"
+    if float(payment.amount or 0) == 0 and payment.coupon_code:
+        return "Coupon — no charge"
+    if payment.gateway == "paypal":
+        return payment.paypal_capture_id or payment.paypal_order_id or "—"
+    return payment.razorpay_payment_id or payment.razorpay_order_id or "—"
+
+
+def _payment_method(payment: Payment | None) -> str:
+    if not payment:
+        return "—"
+    if float(payment.amount or 0) == 0 and payment.coupon_code:
+        return "Coupon — no charge"
+    return "PayPal" if payment.gateway == "paypal" else "Razorpay"
+
+
+@router.get("/invoices")
+def admin_invoices(db: Session = Depends(get_db), q: str | None = None,
+                   date_from: datetime | None = None, date_to: datetime | None = None,
+                   limit: int = Query(25, le=100), offset: int = 0):
+    """Every paid invoice, grouped by who bought it. `limit`/`offset` paginate the BUYER
+    list, not the invoice rows — a buyer with twelve invoices is one row of pagination, not
+    twelve."""
+    query = (db.query(Invoice, Payment)
+               .outerjoin(Payment, Payment.id == Invoice.payment_id)
+               .filter(Invoice.status == "paid"))
+    if date_from:
+        query = query.filter(Invoice.issued_at >= date_from)
+    if date_to:
+        query = query.filter(Invoice.issued_at <= date_to)
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.filter(or_(
+            Invoice.invoice_number.ilike(like),
+            Invoice.customer_email.ilike(like),
+            Payment.razorpay_payment_id.ilike(like),
+            Payment.razorpay_order_id.ilike(like),
+            Payment.paypal_capture_id.ilike(like),
+            Payment.paypal_order_id.ilike(like),
+        ))
+
+    rows = query.order_by(Invoice.issued_at.desc()).limit(MAX_INVOICES_SCANNED).all()
+
+    currency_totals: dict[str, float] = {}
+    buyers: dict[int, dict] = {}
+    order: list[int] = []   # buyer_id in first-seen order == most-recent-invoice-first
+    for inv, payment in rows:
+        currency_totals[inv.currency] = round(
+            currency_totals.get(inv.currency, 0.0) + float(inv.gross or 0), 2)
+
+        uid = inv.user_id
+        if uid not in buyers:
+            buyers[uid] = {
+                "user_id": uid, "email": inv.customer_email,
+                "name": inv.customer_name, "invoices": [],
+                "total_paid": {},
+            }
+            order.append(uid)
+        b = buyers[uid]
+        b["total_paid"][inv.currency] = round(
+            b["total_paid"].get(inv.currency, 0.0) + float(inv.gross or 0), 2)
+        b["invoices"].append({
+            "id": inv.id,
+            "invoice_number": inv.invoice_number,
+            "issued_at": inv.issued_at.isoformat() if inv.issued_at else None,
+            "plan": inv.plan,
+            "description": inv.description,
+            "currency": inv.currency,
+            "list_amount": round(float(inv.gross or 0) + float(inv.discount or 0), 2),
+            "discount": float(inv.discount or 0),
+            "paid_amount": float(inv.gross or 0),
+            "coupon_code": inv.coupon_code,
+            "payment_method": _payment_method(payment),
+            "payment_reference": _payment_reference(payment),
+        })
+
+    total_buyers = len(order)
+    page_ids = order[offset:offset + limit]
+    return {
+        "buyer_count": total_buyers,
+        "invoice_count": len(rows),
+        "currency_totals": currency_totals,
+        "limit": limit, "offset": offset,
+        "buyers": [buyers[uid] for uid in page_ids],
+    }

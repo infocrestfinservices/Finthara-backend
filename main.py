@@ -27,6 +27,16 @@ from routers.engine_test_router import router as engine_test_router  # dev only
 
 IS_PRODUCTION = settings.ENV.strip().lower() == "production"
 
+# create_all() below only creates a table for a model class that has actually been imported
+# somewhere by this point — every OTHER model gets pulled in eagerly by some router's
+# top-level `from models.x import Y` (payment_model via payment_router, invoice_model via
+# invoice_router, ...), but nothing imports coupon_model that way; every reference to it is a
+# lazy, inside-a-function import (admin_router's coupon endpoints, services/coupons.py). On an
+# already-provisioned database this is invisible — the table already exists — which is exactly
+# what let it go unnoticed; a genuinely FRESH database would create every table except this
+# one, and the first coupon ever applied would fail with "no such table: coupons".
+from models.coupon_model import Coupon, CouponRedemption  # noqa: F401
+
 # Create all database tables on startup (Neon / Supabase Fix)
 Base.metadata.create_all(bind=engine)
 

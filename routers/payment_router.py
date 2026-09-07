@@ -37,9 +37,27 @@ from services.entitlements import (PLANS, PURCHASABLE, can_purchase, expiry_for,
                                    grant_plan)
 from services import coupons as coupon_service
 from services import subscriptions as subs
+from services.email_service import send_plan_purchase_email
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments", tags=["Payments"])
+
+
+def _send_purchase_email(user: User, payment: Payment, invoice) -> None:
+    """Best-effort — see services/email_service.py. Never raised past this point: a mail
+    provider outage must not turn an otherwise-successful, already-committed payment into an
+    error response. `invoice` may be None (its own issuance can fail independently), in which
+    case the payment id stands in so the email still has SOME reference number."""
+    try:
+        send_plan_purchase_email(
+            user.email, user.full_name,
+            invoice_number=(invoice.invoice_number if invoice else f"payment-{payment.id}"),
+            plan_label=PLANS.get(payment.plan, {}).get("name", payment.plan),
+            amount=float(payment.amount or 0), currency=payment.currency or "INR",
+            discount=float(payment.discount or 0))
+    except Exception:
+        logger.exception("payments: purchase email could not be sent for payment %s",
+                         payment.id)
 
 # The price list lives on the SERVER, not in the frontend — the pricing page may show
 # whatever it likes; what gets charged is this. It is imported rather than restated because
@@ -126,6 +144,16 @@ def create_order(req: OrderRequest, current_user: User = Depends(get_current_use
                                   float(plan["amount"]), discount, 0.0, paid.id)
             logger.info("payments: %s covered the full price of %s for user %s",
                         coupon.code, req.plan, current_user.id)
+            # A ₹0 sale is still a sale — the customer needs a document for it same as a paid
+            # one, and the coupon-covered branch was the one place that never issued one.
+            invoice = None
+            try:
+                from services import invoices as invoice_service
+                invoice = invoice_service.for_payment(db, paid)
+            except Exception:
+                logger.exception("payments: invoice could not be issued for payment %s",
+                                 paid.id)
+            _send_purchase_email(current_user, paid, invoice)
             return {"free": True, "plan": {"id": req.plan.lower(), **plan},
                     "discount": discount, "amount": 0,
                     "message": f"{coupon.code} covers the full price — your plan is active."}
@@ -224,13 +252,15 @@ def verify_payment(req: VerifyRequest, current_user: User = Depends(get_current_
     # The invoice is issued here, after the signature has verified and the money is real.
     # Never at order time: an abandoned checkout would leave a numbered document for a
     # payment that never happened, and the series is meant to be a record of actual sales.
+    invoice = None
     try:
         from services import invoices as invoice_service
-        invoice_service.for_payment(db, payment)
+        invoice = invoice_service.for_payment(db, payment)
     except Exception:
         # The customer has paid and their plan is granted; a failed invoice must not turn
         # that into an error on their screen. It is logged and can be re-issued.
         logger.exception("payments: invoice could not be issued for payment %s", payment.id)
+    _send_purchase_email(current_user, payment, invoice)
 
     logger.info("payments: order %s PAID by user %s — plan is now %s (expires %s)",
                 req.razorpay_order_id, current_user.id, payment.plan,
