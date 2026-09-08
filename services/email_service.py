@@ -182,3 +182,57 @@ def send_plan_purchase_email(email: str, full_name: str, *, invoice_number: str,
                           timeout=_RESEND_TIMEOUT)
     if response.status_code >= 400:
         raise RuntimeError(f"Resend API returned {response.status_code}: {response.text}")
+
+
+def _team_invite_html(inviter_name: str, team_name: str, role: str, link: str,
+                      days: int) -> str:
+    who = inviter_name or "Someone"
+    return f"""\
+<div style="font-family: Arial, Helvetica, sans-serif; max-width: 480px; margin: 0 auto; color: #0F172A;">
+  <h2 style="color: #1B3A6B; margin-bottom: 8px;">You've been added to a team</h2>
+  <p style="margin: 0 0 16px;">
+    {who} has invited you to join <strong>{team_name}</strong> on {settings.FROM_NAME}
+    as a <strong>{role}</strong>.
+  </p>
+  <p style="margin: 0 0 20px;">
+    <a href="{link}"
+       style="display: inline-block; background: #1B3A6B; color: #ffffff;
+              padding: 12px 22px; border-radius: 8px; text-decoration: none;
+              font-weight: bold;">Accept the invitation</a>
+  </p>
+  <p style="margin: 0 0 16px; font-size: 13px; color: #64748B;">
+    If the button doesn't work, paste this into your browser:<br>
+    <span style="word-break: break-all; color: #2563EB;">{link}</span>
+  </p>
+  <p style="margin: 0; font-size: 13px; color: #64748B;">
+    This link works for {days} days. If you don't have an account yet, sign up with this
+    same email address and you'll be added automatically. Not expecting this? You can
+    ignore this email.
+  </p>
+</div>"""
+
+
+def send_team_invite_email(email: str, *, inviter_name: str, team_name: str, role: str,
+                           token: str) -> bool:
+    """Invitation to join a team. Sync (called from the plain-`def` team router). Returns
+    False when email isn't configured so the caller can hand the link back for dev use,
+    the same accommodation the OTP / reset flows make."""
+    if not email_configured():
+        return False
+
+    link = f"{settings.FRONTEND_URL.rstrip('/')}/accept-invite?token={token}"
+    payload = {
+        "from": f"{settings.FROM_NAME} <{settings.FROM_EMAIL}>",
+        "to": [email],
+        "subject": f"You've been invited to a team on {settings.FROM_NAME}",
+        "html": _team_invite_html(inviter_name, team_name, role, link, 14),
+    }
+    headers = {
+        "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    response = httpx.post(RESEND_ENDPOINT, json=payload, headers=headers,
+                          timeout=_RESEND_TIMEOUT)
+    if response.status_code >= 400:
+        raise RuntimeError(f"Resend API returned {response.status_code}: {response.text}")
+    return True

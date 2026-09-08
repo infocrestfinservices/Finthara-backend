@@ -23,6 +23,7 @@ from routers.paypal_router import router as paypal_router
 from routers.admin_router import router as admin_router
 from routers.invoice_router import router as invoice_router
 from routers.profile_router import router as profile_router
+from routers.team_router import router as team_router
 from routers.engine_test_router import router as engine_test_router  # dev only
 
 IS_PRODUCTION = settings.ENV.strip().lower() == "production"
@@ -36,6 +37,11 @@ IS_PRODUCTION = settings.ENV.strip().lower() == "production"
 # what let it go unnoticed; a genuinely FRESH database would create every table except this
 # one, and the first coupon ever applied would fail with "no such table: coupons".
 from models.coupon_model import Coupon, CouponRedemption  # noqa: F401
+# Team seats: same reasoning — every reference to these is inside a function/router body,
+# so create_all() only learns about the tables if they are imported here too. team_router
+# does import them eagerly, but keep it explicit and independent of router wiring.
+from models.company_model import CompanyUser, CompanyInvitation  # noqa: F401
+from models.audit_log_model import AuditLog  # noqa: F401
 
 # Create all database tables on startup (Neon / Supabase Fix)
 Base.metadata.create_all(bind=engine)
@@ -112,6 +118,7 @@ app.include_router(paypal_router)
 app.include_router(admin_router)
 app.include_router(invoice_router)
 app.include_router(profile_router)
+app.include_router(team_router)
 
 if not IS_PRODUCTION:
     app.include_router(engine_test_router)

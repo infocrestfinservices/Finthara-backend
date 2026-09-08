@@ -7,7 +7,9 @@ from models.report_model import Report
 from models.user_model import User
 from schemas.project_schema import ProjectCreate, ProjectResponse, ProjectUpdate
 from schemas.report_schema import ReportCreate, ReportResponse
-from dependencies import get_current_user, get_owned_project
+from dependencies import (get_current_user, get_owned_project, require_project_editor,
+                          get_strictly_owned_project)
+from services.roles import my_company_ids
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -30,9 +32,13 @@ def get_projects(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return db.query(Project).filter(
-        Project.user_id == current_user.id
-    ).order_by(Project.created_at.desc()).all()
+    """The caller's own projects, plus every project owned by a team they are an active
+    member of (any role). `user_id` on each row tells the frontend whose it is."""
+    owner_ids = [current_user.id] + my_company_ids(db, current_user.id)
+    return (db.query(Project)
+              .filter(Project.user_id.in_(owner_ids))
+              .order_by(Project.created_at.desc())
+              .all())
 
 @router.get("/{project_id}", response_model=ProjectResponse)
 def get_project(project: Project = Depends(get_owned_project)):
@@ -42,7 +48,7 @@ def get_project(project: Project = Depends(get_owned_project)):
 @router.patch("/{project_id}", response_model=ProjectResponse)
 def update_project(
     data: ProjectUpdate,
-    project: Project = Depends(get_owned_project),
+    project: Project = Depends(require_project_editor),
     db: Session = Depends(get_db),
 ):
     """Edit a project's details. There was no update route at all, so "Edit Details" in
@@ -66,7 +72,7 @@ def update_project(
 @router.post("/{project_id}/report", response_model=ReportResponse)
 def save_report(
     data: ReportCreate,
-    project: Project = Depends(get_owned_project),
+    project: Project = Depends(require_project_editor),
     db: Session = Depends(get_db),
 ):
     existing = db.query(Report).filter(Report.project_id == project.id).first()
@@ -103,7 +109,7 @@ def get_report(
 
 @router.delete("/{project_id}")
 def delete_project(
-    project: Project = Depends(get_owned_project),
+    project: Project = Depends(get_strictly_owned_project),
     db: Session = Depends(get_db),
 ):
     db.delete(project)

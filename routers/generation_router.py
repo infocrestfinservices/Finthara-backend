@@ -24,7 +24,7 @@ from database import get_db
 from models.project_model import Project
 from models.report_model import Report
 from models.questionnaire_model import QuestionnaireAnswer
-from dependencies import get_owned_project, get_current_user
+from dependencies import get_owned_project, get_current_user, require_project_editor
 from models.user_model import User
 from services.entitlements import may_generate, may_export
 
@@ -591,7 +591,7 @@ def get_branding(project: Project = Depends(get_owned_project),
 
 
 @router.post("/{project_id}/branding")
-def save_branding(req: BrandingRequest, project: Project = Depends(get_owned_project),
+def save_branding(req: BrandingRequest, project: Project = Depends(require_project_editor),
                   db: Session = Depends(get_db)):
     """Persist the report's logo and brand colour.
 
@@ -718,7 +718,7 @@ def get_inserts(project: Project = Depends(get_owned_project),
 
 
 @router.post("/{project_id}/inserts")
-def save_inserts(req: InsertsRequest, project: Project = Depends(get_owned_project),
+def save_inserts(req: InsertsRequest, project: Project = Depends(require_project_editor),
                  db: Session = Depends(get_db)):
     """Persist the client's inserted images."""
     if len(req.inserts) > _MAX_INSERTS:
@@ -853,13 +853,24 @@ def _require(allowed_reason):
     if not allowed:
         raise HTTPException(status_code=402, detail=why)
 
+
+def _plan_holder(db: Session, project: Project, current_user: User) -> User:
+    """Whose plan covers this project's generation / downloads. For your own project that's
+    you; for a project you can only touch as a team member, it's the account that owns it —
+    a member generating the owner's report spends the OWNER's (paid) allowance, not their
+    own free one, and gets the owner's export formats."""
+    if project.user_id is None or project.user_id == current_user.id:
+        return current_user
+    owner = db.query(User).filter(User.id == project.user_id).first()
+    return owner or current_user
+
 @router.post("/{project_id}")
-def generate(req: GenerateRequest, project: Project = Depends(get_owned_project),
+def generate(req: GenerateRequest, project: Project = Depends(require_project_editor),
              db: Session = Depends(get_db),
              current_user: User = Depends(get_current_user)):
     # A project that has already been generated passes: that is a REGENERATION of a report
     # the user has, not a new one, and the product actively encourages re-running it.
-    _require(may_generate(db, current_user, project.id))
+    _require(may_generate(db, _plan_holder(db, project, current_user), project.id))
     purpose_key = resolve_purpose(project.purpose, project.financial_format)
 
     # Gather the answers: everything already stored for this project, with anything the
@@ -1165,7 +1176,7 @@ def _is_short(project: Project) -> bool:
 @router.get("/{project_id}/excel")
 def download_excel(project: Project = Depends(get_owned_project), db: Session = Depends(get_db),
                    current_user: User = Depends(get_current_user)):
-    _require(may_export(current_user, "excel"))
+    _require(may_export(_plan_holder(db, project, current_user), "excel"))
     purpose_key = resolve_purpose(project.purpose, project.financial_format)
     answers = _stored_answers(db, project)
 
@@ -1357,7 +1368,7 @@ def _build_word_report(project: Project, db: Session):
 @router.get("/{project_id}/word")
 def download_word(project: Project = Depends(get_owned_project), db: Session = Depends(get_db),
                   current_user: User = Depends(get_current_user)):
-    _require(may_export(current_user, "word"))
+    _require(may_export(_plan_holder(db, project, current_user), "word"))
     try:
         data, base = _build_word_report(project, db)
     except Exception as e:
@@ -1370,7 +1381,7 @@ def download_word(project: Project = Depends(get_owned_project), db: Session = D
 @router.get("/{project_id}/pdf")
 def download_pdf(project: Project = Depends(get_owned_project), db: Session = Depends(get_db),
                  current_user: User = Depends(get_current_user)):
-    _require(may_export(current_user, "pdf"))
+    _require(may_export(_plan_holder(db, project, current_user), "pdf"))
     """PDF of the report, rendered by LibreOffice from the SAME Word document that the
     .docx download produces — so the PDF, Word and Excel all carry identical figures."""
     from services.recalc_service import to_pdf, libreoffice_available

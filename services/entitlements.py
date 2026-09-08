@@ -38,22 +38,26 @@ logger = logging.getLogger(__name__)
 # exports: which download formats the plan may use.
 # period_days: None for a one-time purchase that never lapses; a number for a plan that
 #              must be paid again, after which the user falls back to `free`.
+# seats: total people who may be on the account's team, INCLUDING the account holder. 1
+# means "no team" (just you). Team management (models/company_model.py, routers/team_router.py)
+# is offered only on the two plans whose seats > 1.  NOTE: the professional/enterprise counts
+# below are a starting point — adjust to whatever the pricing page promises.
 PLANS = {
     "free": {
         "label": "Free", "amount": 0, "usd_amount": 0, "period": "free", "period_days": None,
-        "reports": 1, "exports": {"pdf"},
+        "reports": 1, "exports": {"pdf"}, "seats": 1,
     },
     "starter": {
         "label": "Starter", "amount": 499, "usd_amount": 6, "period": "one-time", "period_days": None,
-        "reports": 3, "exports": {"pdf"},
+        "reports": 3, "exports": {"pdf"}, "seats": 1,
     },
     "professional": {
         "label": "Professional", "amount": 1499, "usd_amount": 149, "period": "monthly", "period_days": 30,
-        "reports": None, "exports": {"pdf", "word", "excel"},
+        "reports": None, "exports": {"pdf", "word", "excel"}, "seats": 5,
     },
     "enterprise": {
         "label": "Enterprise", "amount": 4999, "usd_amount": 499, "period": "monthly", "period_days": 30,
-        "reports": None, "exports": {"pdf", "word", "excel"},
+        "reports": None, "exports": {"pdf", "word", "excel"}, "seats": 25,
     },
 }
 FREE_PLAN = "free"
@@ -63,6 +67,16 @@ PURCHASABLE = {k: v for k, v in PLANS.items() if v["amount"] > 0}
 
 def plan_spec(plan: str) -> dict:
     return PLANS.get((plan or "").strip().lower()) or PLANS[FREE_PLAN]
+
+
+def seat_limit(user) -> int:
+    """How many people (owner + members) this account's plan allows on its team."""
+    return plan_spec(effective_plan(user)).get("seats", 1)
+
+
+def team_enabled(user) -> bool:
+    """Whether this account's current plan includes team seats at all."""
+    return seat_limit(user) > 1
 
 
 def effective_plan(user) -> str:

@@ -185,7 +185,18 @@ def verify_email(request: VerifyEmailRequest, db: Session = Depends(get_db)):
     user.email_verification_otp = None
     user.otp_expires_at = None
     db.commit()
-    
+
+    # Someone invited to a team before they had an account lands on it now, automatically.
+    try:
+        from services.team_service import claim_pending_for
+        claimed = claim_pending_for(db, user)
+        if claimed:
+            db.commit()
+    except Exception:
+        db.rollback()
+        logger.warning("auth: could not auto-claim team invites for user %s", user.id,
+                       exc_info=True)
+
     return {"message": "Email verified successfully."}
 
 @router.post("/resend-otp")
