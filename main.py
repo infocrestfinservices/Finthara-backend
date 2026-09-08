@@ -24,6 +24,7 @@ from routers.admin_router import router as admin_router
 from routers.invoice_router import router as invoice_router
 from routers.profile_router import router as profile_router
 from routers.team_router import router as team_router
+from routers.contact_router import router as contact_router
 from routers.engine_test_router import router as engine_test_router  # dev only
 
 IS_PRODUCTION = settings.ENV.strip().lower() == "production"
@@ -119,6 +120,7 @@ app.include_router(admin_router)
 app.include_router(invoice_router)
 app.include_router(profile_router)
 app.include_router(team_router)
+app.include_router(contact_router)
 
 if not IS_PRODUCTION:
     app.include_router(engine_test_router)

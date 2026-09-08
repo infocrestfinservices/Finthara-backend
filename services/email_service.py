@@ -184,6 +184,38 @@ def send_plan_purchase_email(email: str, full_name: str, *, invoice_number: str,
         raise RuntimeError(f"Resend API returned {response.status_code}: {response.text}")
 
 
+def send_contact_message(*, name: str, from_email: str, message: str,
+                         topic: str | None = None) -> bool:
+    """Deliver a website contact-form message to COMPANY_EMAIL. Sync (called from a plain
+    `def` route). Returns False when email isn't configured so the page can fall back to a
+    mailto: link. `reply_to` is the sender so a reply from the inbox goes to them."""
+    if not email_configured():
+        return False
+
+    to = settings.COMPANY_EMAIL or settings.FROM_EMAIL
+    subject = f"Contact form: {topic}" if topic else "New contact form message"
+    body = (f"Name: {name}\n"
+            f"Email: {from_email}\n"
+            + (f"Topic: {topic}\n" if topic else "")
+            + f"\n{message}\n")
+    payload = {
+        "from": f"{settings.FROM_NAME} <{settings.FROM_EMAIL}>",
+        "to": [to],
+        "reply_to": from_email,
+        "subject": subject,
+        "text": body,
+    }
+    headers = {
+        "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    response = httpx.post(RESEND_ENDPOINT, json=payload, headers=headers,
+                          timeout=_RESEND_TIMEOUT)
+    if response.status_code >= 400:
+        raise RuntimeError(f"Resend API returned {response.status_code}: {response.text}")
+    return True
+
+
 def _team_invite_html(inviter_name: str, team_name: str, role: str, link: str,
                       days: int) -> str:
     who = inviter_name or "Someone"
