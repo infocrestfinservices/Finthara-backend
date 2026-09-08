@@ -156,10 +156,14 @@ _STATEMENT_SHEETS = [
 
 
 def extract_wc_seed(recalc_bytes: bytes) -> dict:
-    """Year-1 current assets & liabilities from Form IV, returned as "WC & CC-OD Limit"
-    input-cell values. Seeds the standalone MPBF calculator so it opens showing THIS
-    project's real position (identical to Form V) while its cells stay plain blue inputs
-    the user can overwrite with their own actual CA/CL figures."""
+    """DEPRECATED — DO NOT CALL. "WC & CC-OD Limit" C5/C6/C8/C12/C13 are live formulas in
+    every current template (=Form_IV_CA_CL!C14, =MAX(0,C6*(1-C9)-C7), ...). Writing this
+    function's static values into the persisted answers clobbered those formulas on every
+    generation (see generation_router.py). Kept only so the removal is greppable; wire it
+    back only after confirming the sheet no longer links to Form_IV_CA_CL at those cells.
+
+    Year-1 current assets & liabilities from Form IV, returned as "WC & CC-OD Limit"
+    input-cell values."""
     try:
         wb = load_workbook(BytesIO(recalc_bytes), data_only=True)
     except Exception:

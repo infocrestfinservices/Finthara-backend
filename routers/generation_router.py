@@ -97,14 +97,35 @@ def _stored_answers(db: Session, project: Project) -> dict:
     q = db.query(QuestionnaireAnswer).filter(QuestionnaireAnswer.project_id == project.id).first()
     if q and q.collected_data:
         try:
-            return json.loads(q.collected_data)
+            data = json.loads(q.collected_data)
         except (ValueError, TypeError):
             return {}
+        # Strip here too (not just on save) so a project saved under the old
+        # extract_wc_seed() code is clean on THIS load — the very next fill_template
+        # call, not just the one after — and never re-applies stale "WC & CC-OD
+        # Limit" values to the sheet's live formula cells.
+        for k in _STALE_WC_SEED_KEYS:
+            data.pop(k, None)
+        return data
     return {}
+
+
+_STALE_WC_SEED_KEYS = (
+    "WC & CC-OD Limit!C5", "WC & CC-OD Limit!C6", "WC & CC-OD Limit!C8",
+    "WC & CC-OD Limit!C12", "WC & CC-OD Limit!C13",
+)
 
 
 def _persist_answers(db: Session, project: Project, answers: dict) -> None:
     """Upsert the project's questionnaire answers (incl. AI-generated cell values)."""
+    # Self-heal projects saved before the extract_wc_seed() removal: those 5 keys hold
+    # static numbers that were clobbering "WC & CC-OD Limit" formula cells on every
+    # fill. Strip them here so any project generated under the old code recovers its
+    # live Form_IV_CA_CL links on its very next generate/regenerate, no manual DB fix
+    # needed.
+    if answers:
+        for k in _STALE_WC_SEED_KEYS:
+            answers.pop(k, None)
     q = db.query(QuestionnaireAnswer).filter(QuestionnaireAnswer.project_id == project.id).first()
     payload = json.dumps(answers or {})
     if q:
@@ -983,15 +1004,18 @@ def generate(req: GenerateRequest, project: Project = Depends(get_owned_project)
                 from services.financial_summary_service import (extract_financial_summary,
                                                                 extract_market_segments,
                                                                 extract_statement_tables,
-                                                                extract_key_assumptions,
-                                                                extract_wc_seed)
+                                                                extract_key_assumptions)
                 excel_summary = extract_financial_summary(recalc) or None
                 market_segments = extract_market_segments(recalc) or None
                 statement_tables = extract_statement_tables(recalc) or None
                 key_assumptions = extract_key_assumptions(recalc) or None
-                # Seed the standalone WC / CC-OD calculator with this project's Year-1 CA/CL
-                # (a real starting point matching Form V), left as editable blue inputs.
-                answers.update(extract_wc_seed(recalc))
+                # NOTE: "WC & CC-OD Limit" C5/C6/C8/C12/C13 are LIVE FORMULAS in the
+                # current template (=Form_IV_CA_CL!C14 etc.) — they must never be seeded
+                # with static values here. A previous extract_wc_seed() call used to do
+                # exactly that (leftover from before the sheet was formula-linked) and
+                # was silently clobbering these formulas with wrongly-mapped numbers on
+                # every generation. Removed — do not reintroduce without first checking
+                # the sheet no longer has live Form_IV_CA_CL links at those cells.
                 logger.info("generate: project=%s recalc KPIs=%d checks=%s summary=%s", project.id,
                             len(kpis), {c["name"][:22]: c["ok"] for c in (consistency or [])},
                             bool(excel_summary))
