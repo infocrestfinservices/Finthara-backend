@@ -27,6 +27,7 @@ from models.questionnaire_model import QuestionnaireAnswer
 from dependencies import get_owned_project, get_current_user, require_project_editor
 from models.user_model import User
 from services.entitlements import may_generate, may_export
+from services import generation_jobs
 
 from purpose_config import resolve_purpose, get_config
 from template_config import (default_template, get_template, find_template_by_id,
@@ -868,9 +869,79 @@ def _plan_holder(db: Session, project: Project, current_user: User) -> User:
 def generate(req: GenerateRequest, project: Project = Depends(require_project_editor),
              db: Session = Depends(get_db),
              current_user: User = Depends(get_current_user)):
-    # A project that has already been generated passes: that is a REGENERATION of a report
-    # the user has, not a new one, and the product actively encourages re-running it.
+    """Kick off a report generation and return a job id — the actual work (AI agents +
+    recalc + Word build, minutes of it) runs on a worker thread so it can't be killed by
+    the platform's request timeout. The browser polls GET /generate/jobs/{id}.
+
+    A project that has already been generated passes the quota gate: that is a REGENERATION
+    of a report the user has, not a new one, and the product actively encourages re-running
+    it.
+    """
     _require(may_generate(db, _plan_holder(db, project, current_user), project.id))
+
+    active = generation_jobs.find_active(db, project.id)
+    if active:
+        return {"job_id": active.id, "status": active.status, "progress": active.progress,
+                "stage": active.stage}
+
+    job = generation_jobs.create(db, project_id=project.id, user_id=current_user.id)
+    pid = project.id
+    req_data = req.model_dump()
+
+    def _work(jdb, jjob):
+        # Fresh objects on the worker thread's own session — the request's project/db are
+        # gone by the time this runs.
+        proj = jdb.query(Project).filter(Project.id == pid).first()
+        if not proj:
+            raise RuntimeError("The project was deleted before its report could be built.")
+        return _run_generation(jdb, proj, GenerateRequest(**req_data),
+                               prog=lambda p, s: generation_jobs.progress(jdb, jjob, p, s))
+
+    generation_jobs.submit(job.id, _work)
+    return {"job_id": job.id, "status": "queued", "progress": 0, "stage": "Queued"}
+
+
+@router.get("/jobs/{job_id}")
+def generation_job_status(job_id: str, db: Session = Depends(get_db),
+                          current_user: User = Depends(get_current_user)):
+    """Poll target for a running generation. 404 (not 403) for a job that isn't yours and
+    isn't on a project you can see — same rule as get_owned_project."""
+    from models.generation_job_model import GenerationJob
+    job = db.query(GenerationJob).filter(GenerationJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Not found")
+    if job.user_id != current_user.id:
+        proj = db.query(Project).filter(Project.id == job.project_id).first()
+        from services.roles import role_in_company
+        if not proj or proj.user_id is None or not role_in_company(
+                db, owner_user_id=proj.user_id, user_id=current_user.id):
+            raise HTTPException(status_code=404, detail="Not found")
+
+    out = {"job_id": job.id, "status": job.status, "progress": job.progress,
+           "stage": job.stage, "project_id": job.project_id}
+    if job.status == "done" and job.result:
+        try:
+            out["result"] = json.loads(job.result)
+        except ValueError:
+            out["status"] = "failed"
+            out["error"] = "The report finished but its result could not be read. Please regenerate."
+    if job.status == "failed":
+        out["error"] = job.error or "Report generation failed. Please try again."
+    return out
+
+
+def _run_generation(db: Session, project: Project, req: GenerateRequest, prog=None) -> dict:
+    """The generation pipeline itself. Runs on a worker thread (see services/generation_jobs.py)
+    with its own db session; `prog(pct, stage)` reports progress to the job row, or is a
+    no-op when called directly."""
+    def _p(pct, stage):
+        if prog:
+            try:
+                prog(pct, stage)
+            except Exception:
+                logger.debug("progress callback failed", exc_info=True)
+
+    _p(3, "Reading your inputs")
     purpose_key = resolve_purpose(project.purpose, project.financial_format)
 
     # Gather the answers: everything already stored for this project, with anything the
@@ -891,8 +962,10 @@ def generate(req: GenerateRequest, project: Project = Depends(require_project_ed
 
     # Reuse the cached market/feasibility/SWOT analysis on a plain regeneration; a refresh
     # (re-ask the AI) or the first run rebuilds it. Saves 3 of a regeneration's ~4 LLM calls.
+    _p(12, "Researching your market and industry")
     agent_context = _build_agent_context(project, purpose_key, answers,
                                          refresh=req.refresh_inputs)
+    _p(45, "Building the financial model")
 
     # What the user asked for in their own words. Deliberately NOT merged into
     # agent_context: that block also feeds the cell-filling AI (so a wording request
@@ -1004,6 +1077,7 @@ def generate(req: GenerateRequest, project: Project = Depends(require_project_ed
         # report's numbers identical to the Excel model.
         if libreoffice_available():
             try:
+                _p(62, "Calculating the projections")
                 recalc = recalculate_xlsx(optional_sheets.apply(
                     fill_template(tpurpose, template["id"], answers), answers))
                 kpis = extract_kpis(recalc, analysis)
@@ -1129,6 +1203,7 @@ def generate(req: GenerateRequest, project: Project = Depends(require_project_ed
     # reference list is still a report.
     if not req.excel_only:
         try:
+            _p(85, "Compiling sources and references")
             from agents.references_agent import references_agent
             refs = references_agent(_project_dict(project, answers))
             if refs:
@@ -1136,6 +1211,7 @@ def generate(req: GenerateRequest, project: Project = Depends(require_project_ed
         except Exception:
             logger.warning("generate: references unavailable", exc_info=True)
 
+    _p(93, "Writing up the report")
     preview = _preview_markdown(model, purpose_key, project, excel_only=req.excel_only)
 
     # Persist on the project's report row.

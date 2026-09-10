@@ -43,6 +43,8 @@ from models.coupon_model import Coupon, CouponRedemption  # noqa: F401
 # does import them eagerly, but keep it explicit and independent of router wiring.
 from models.company_model import CompanyUser, CompanyInvitation  # noqa: F401
 from models.audit_log_model import AuditLog  # noqa: F401
+# Background report-generation jobs — same reason (only referenced inside function bodies).
+from models.generation_job_model import GenerationJob  # noqa: F401
 
 # Create all database tables on startup (Neon / Supabase Fix)
 Base.metadata.create_all(bind=engine)
@@ -139,6 +141,20 @@ def _register_folder_templates():
                 len(ok), len(added) - len(ok))
     except Exception:
         logging.getLogger("templates").warning("startup template scan failed", exc_info=True)
+
+
+@app.on_event("startup")
+def _fail_orphaned_generation_jobs():
+    """A deploy or a restart leaves any in-flight generation job stuck at 'running' with
+    nothing working it. Fail those so a browser polling one gets a clear answer."""
+    import logging
+    try:
+        from services.generation_jobs import sweep_stale
+        n = sweep_stale()
+        if n:
+            logging.getLogger("gen_jobs").info("startup: failed %d orphaned generation job(s)", n)
+    except Exception:
+        logging.getLogger("gen_jobs").warning("startup job sweep failed", exc_info=True)
 
 
 @app.get("/")
