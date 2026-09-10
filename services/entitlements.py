@@ -17,9 +17,9 @@ cannot drift apart:
 
   free            a trial — 1 report, PDF only
   starter    ₹499 one-time — 3 reports, PDF only
-  professional ₹1,499 / month — unlimited reports, PDF + Word + Excel
-  enterprise ₹4,999 / month — the same, plus what is sold on top of it (seats,
-                              white-label) which is not modelled here yet
+  professional ₹1,499 / month — unlimited reports, PDF + Word + Excel, 3 team seats
+  enterprise ₹4,999 / month — the same, plus 10 team seats (white-label is still
+                              marketing-only, not modelled)
 
 `free` is not on the pricing page; a product nobody can try does not get bought, so one
 report is allowed without paying. It is a deliberate addition, not something read off the
@@ -40,8 +40,8 @@ logger = logging.getLogger(__name__)
 #              must be paid again, after which the user falls back to `free`.
 # seats: total people who may be on the account's team, INCLUDING the account holder. 1
 # means "no team" (just you). Team management (models/company_model.py, routers/team_router.py)
-# is offered only on the two plans whose seats > 1.  NOTE: the professional/enterprise counts
-# below are a starting point — adjust to whatever the pricing page promises.
+# is offered only on the two plans whose seats > 1. These match the pricing page
+# (landingData.js): Professional 3, Enterprise 10 — change both together.
 PLANS = {
     "free": {
         "label": "Free", "amount": 0, "usd_amount": 0, "period": "free", "period_days": None,
@@ -53,11 +53,11 @@ PLANS = {
     },
     "professional": {
         "label": "Professional", "amount": 1499, "usd_amount": 149, "period": "monthly", "period_days": 30,
-        "reports": None, "exports": {"pdf", "word", "excel"}, "seats": 5,
+        "reports": None, "exports": {"pdf", "word", "excel"}, "seats": 3,
     },
     "enterprise": {
         "label": "Enterprise", "amount": 4999, "usd_amount": 499, "period": "monthly", "period_days": 30,
-        "reports": None, "exports": {"pdf", "word", "excel"}, "seats": 25,
+        "reports": None, "exports": {"pdf", "word", "excel"}, "seats": 10,
     },
 }
 FREE_PLAN = "free"
