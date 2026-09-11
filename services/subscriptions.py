@@ -96,7 +96,7 @@ def find_or_create_plan(our_plan: str) -> str:
             "name": f"{spec['label']} (monthly)",
             "amount": int(spec["amount"] * 100),
             "currency": "INR",
-            "description": f"ReportCraft {spec['label']} plan, billed monthly",
+            "description": f"Finthara {spec['label']} plan, billed monthly",
         },
         "notes": {"app_plan": our_plan},
     })

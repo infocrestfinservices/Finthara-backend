@@ -88,7 +88,7 @@ class Settings(BaseSettings):
     # Read from the environment rather than written into the code, because these are legal
     # details on a document a customer keeps: they change without the software changing, and
     # the person who knows them is not the person editing Python.
-    COMPANY_NAME: str = "ReportCraft AI"
+    COMPANY_NAME: str = "Finthara AI"
     COMPANY_ADDRESS: str = ""
     COMPANY_EMAIL: str = "support@infocrest.in"
     COMPANY_STATE: str = ""
@@ -142,7 +142,7 @@ class Settings(BaseSettings):
     PAYPAL_WEBHOOK_ID: str = ""
     PAYPAL_CURRENCY: str = "USD"
     # Shown on PayPal's own approval/review screen and on the buyer's card/bank statement.
-    PAYPAL_BRAND_NAME: str = "ReportCraft AI"
+    PAYPAL_BRAND_NAME: str = "Finthara AI"
 
     @property
     def paypal_enabled(self) -> bool:
