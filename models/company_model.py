@@ -1,7 +1,7 @@
 """Company-scoped team membership and invitations.
 
 There is no separate `Company` table. In this app, billing and plan already live on `User`
-(see models/user_model.py, services/entitlements.py) — a "company" IS the Enterprise-plan
+(see models/user_model.py, services/entitlements.py) — a "company" IS the Advanced-plan
 account whose seats a team shares, so it is named by that account's own user id
 (`owner_user_id`) rather than by a row of its own. The same person can be Owner of their own
 account and Viewer on someone else's — that's why role is per (owner_user_id, user_id) pair,

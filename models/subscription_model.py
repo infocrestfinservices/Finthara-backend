@@ -22,7 +22,7 @@ class Subscription(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
-    plan = Column(String, nullable=False)                 # our key: professional | enterprise
+    plan = Column(String, nullable=False)                 # our key: basic | advanced
     razorpay_plan_id = Column(String, nullable=False)
     razorpay_subscription_id = Column(String, nullable=False, unique=True, index=True)
 

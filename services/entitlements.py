@@ -15,15 +15,14 @@ here. Adding a plan or changing a limit is editing PLANS — nothing else.
 The limits come from the public pricing page, so what is charged and what is delivered
 cannot drift apart:
 
-  free            a trial — 1 report, PDF only
-  starter    ₹499 one-time — 3 reports, PDF only
-  professional ₹1,499 / month — unlimited reports, PDF + Word + Excel, 3 team seats
-  enterprise ₹4,999 / month — the same, plus 10 team seats (white-label is still
-                              marketing-only, not modelled)
+  free       not sold — 0 reports, no exports. What a signed-up account sits on before it
+             has ever paid.
+  basic      ₹1,999 / month — unlimited reports, PDF + Word + Excel, 1 seat (no team).
+  advanced   ₹11,000 / month — the same, plus 3 team seats (1 owner + 2 invited members,
+             Netflix-style roles: owner / editor / viewer).
 
-`free` is not on the pricing page; a product nobody can try does not get bought, so one
-report is allowed without paying. It is a deliberate addition, not something read off the
-page.
+`free` is not on the pricing page and carries no allowance — there is no free trial. It
+exists only as the row a brand-new account starts on before its first payment.
 """
 from __future__ import annotations
 
@@ -40,24 +39,20 @@ logger = logging.getLogger(__name__)
 #              must be paid again, after which the user falls back to `free`.
 # seats: total people who may be on the account's team, INCLUDING the account holder. 1
 # means "no team" (just you). Team management (models/company_model.py, routers/team_router.py)
-# is offered only on the two plans whose seats > 1. These match the pricing page
-# (landingData.js): Professional 3, Enterprise 10 — change both together.
+# is offered only on the plan whose seats > 1. This matches the pricing page
+# (landingData.js): Advanced 3 seats — change both together.
 PLANS = {
     "free": {
         "label": "Free", "amount": 0, "usd_amount": 0, "period": "free", "period_days": None,
-        "reports": 1, "exports": {"pdf"}, "seats": 1,
+        "reports": 0, "exports": set(), "seats": 1,
     },
-    "starter": {
-        "label": "Starter", "amount": 499, "usd_amount": 6, "period": "one-time", "period_days": None,
-        "reports": 3, "exports": {"pdf"}, "seats": 1,
+    "basic": {
+        "label": "Basic", "amount": 1999, "usd_amount": 20.99, "period": "monthly", "period_days": 30,
+        "reports": None, "exports": {"pdf", "word", "excel"}, "seats": 1,
     },
-    "professional": {
-        "label": "Professional", "amount": 1499, "usd_amount": 149, "period": "monthly", "period_days": 30,
+    "advanced": {
+        "label": "Advanced", "amount": 11000, "usd_amount": 114.99, "period": "monthly", "period_days": 30,
         "reports": None, "exports": {"pdf", "word", "excel"}, "seats": 3,
-    },
-    "enterprise": {
-        "label": "Enterprise", "amount": 4999, "usd_amount": 499, "period": "monthly", "period_days": 30,
-        "reports": None, "exports": {"pdf", "word", "excel"}, "seats": 10,
     },
 }
 FREE_PLAN = "free"
@@ -168,12 +163,12 @@ def may_export(user, kind: str) -> tuple[bool, str]:
     if kind in spec["exports"]:
         return True, ""
     return False, (f"{kind.upper()} download is not included in the {spec['label']} plan. "
-                   f"Upgrade to Professional to export Word and Excel.")
+                   f"Upgrade to Basic to export Word and Excel.")
 
 
 # Plans ordered by what they give you. Used to decide whether a purchase would leave someone
 # WORSE OFF than they already are — which is the one outcome a payment must never produce.
-RANK = {"free": 0, "starter": 1, "professional": 2, "enterprise": 3}
+RANK = {"free": 0, "basic": 1, "advanced": 2}
 
 
 def grant_plan(user, plan: str, now: datetime | None = None) -> None:
@@ -210,8 +205,8 @@ def can_purchase(db, user, plan: str) -> tuple[bool, str]:
 
     Taking money for something that leaves someone with LESS than they had is the worst thing
     a checkout can do, and it is what happened the first time a real payment went through
-    here: an account on Professional bought Starter and dropped from unlimited reports with
-    Word and Excel to three reports and PDF only. It paid to be downgraded.
+    here: an account on a higher plan bought a lower one and dropped what it already had.
+    It paid to be downgraded.
 
     Refused BEFORE the order is created, so no money moves and there is nothing to refund.
     """
@@ -232,6 +227,6 @@ def can_purchase(db, user, plan: str) -> tuple[bool, str]:
     if plan == current and not spec["period_days"]:
         return False, (
             f"You are already on {spec['label']}, and it does not expire. Buying it again "
-            f"would not add anything — upgrade to Professional for unlimited reports.")
+            f"would not add anything.")
 
     return True, ""

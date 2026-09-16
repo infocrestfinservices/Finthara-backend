@@ -350,7 +350,7 @@ def start_subscription(req: SubscribeRequest, current_user: User = Depends(get_c
     if plan not in subs.RECURRING:
         raise HTTPException(
             status_code=400,
-            detail=f"{req.plan} is not a monthly plan. Starter is a one-time purchase.")
+            detail=f"{req.plan} is not a monthly plan.")
     if not subs.enabled():
         raise HTTPException(status_code=503, detail="Payments are not configured.")
     allowed, why = can_purchase(db, current_user, plan)

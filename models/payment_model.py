@@ -21,7 +21,7 @@ class Payment(Base):
     # id columns below is populated. Existing rows predate PayPal and default to razorpay.
     gateway = Column(String, nullable=False, default="razorpay")
 
-    plan = Column(String, nullable=False)          # starter | professional | enterprise
+    plan = Column(String, nullable=False)          # basic | advanced
     # In the unit `currency` names — rupees for INR, dollars for USD, not paise/cents.
     amount = Column(Float, nullable=False)
     # Minor units (paise for INR, cents for USD) — what the gateway itself was actually asked

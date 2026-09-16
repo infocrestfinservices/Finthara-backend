@@ -122,7 +122,7 @@ def remove_member(db: Session, *, owner: User, member_user_id: int, actor_user_i
 def create_invitation(db: Session, *, owner: User, email: str, role: str,
                       invited_by: User) -> CompanyInvitation:
     if not team_enabled(owner):
-        raise TeamError("Team seats are available on the Professional and Enterprise plans.")
+        raise TeamError("Team seats are available on the Advanced plan.")
 
     email = (email or "").strip().lower()
     if not email or "@" not in email:

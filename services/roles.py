@@ -1,7 +1,7 @@
 """Team roles — the one place that knows what viewer / editor / owner mean and who has
 which, for a given company (see models/company_model.py).
 
-A "company" is an Enterprise/Professional-plan account whose seats a team shares; it is
+A "company" is an Advanced-plan account whose seats a team shares; it is
 identified by that account's own user id (`owner_user_id`). The account holder is always an
 implicit `owner` of their own company — there is no CompanyUser row for them.
 
