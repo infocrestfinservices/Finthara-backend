@@ -165,7 +165,7 @@ def create_order(req: OrderRequest, current_user: User = Depends(get_current_use
             "currency": "INR",
             "receipt": f"u{current_user.id}-{plan['name'].lower()}",
             "notes": {"user_id": str(current_user.id), "plan": req.plan},
-        })
+        }, timeout=15)
     except HTTPException:
         raise
     except Exception as e:
@@ -418,7 +418,8 @@ def cancel_subscription(at_cycle_end: bool = True,
         raise HTTPException(status_code=404, detail="There is no active auto-pay to cancel.")
     try:
         subs.client().subscription.cancel(row.razorpay_subscription_id,
-                                          {"cancel_at_cycle_end": 1 if at_cycle_end else 0})
+                                          {"cancel_at_cycle_end": 1 if at_cycle_end else 0},
+                                          timeout=15)
     except Exception:
         logger.exception("payments: cancel failed for %s", row.razorpay_subscription_id)
         raise HTTPException(status_code=502, detail="Could not cancel with the payment provider.")

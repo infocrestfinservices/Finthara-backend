@@ -80,7 +80,7 @@ def find_or_create_plan(our_plan: str) -> str:
     # Match on our own marker rather than on the name: a name is editable in their dashboard,
     # and a plan whose name someone tidied would be silently duplicated on the next call.
     try:
-        existing = c.plan.all({"count": 100})
+        existing = c.plan.all({"count": 100}, timeout=15)
         for p in existing.get("items", []):
             notes = p.get("notes") or {}
             if notes.get("app_plan") == our_plan and int(
@@ -99,7 +99,7 @@ def find_or_create_plan(our_plan: str) -> str:
             "description": f"Finthara {spec['label']} plan, billed monthly",
         },
         "notes": {"app_plan": our_plan},
-    })
+    }, timeout=15)
     logger.info("subscriptions: created Razorpay plan %s for %s", created["id"], our_plan)
     return created["id"]
 
@@ -118,7 +118,7 @@ def create_subscription(user, our_plan: str, total_count: int = 120) -> dict:
         "quantity": 1,
         "customer_notify": 1,
         "notes": {"user_id": str(user.id), "app_plan": our_plan, "email": user.email or ""},
-    })
+    }, timeout=15)
     logger.info("subscriptions: created %s for user %s on %s", sub["id"], user.id, our_plan)
     return sub
 
