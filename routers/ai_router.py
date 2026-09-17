@@ -60,4 +60,7 @@ def invoke(request: LLMRequest, current_user: User = Depends(get_current_user),
         result = invoke_llm(prompt=request.prompt, model=request.model)
         return LLMResponse(text=result)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Not 500 — App Platform's edge substitutes its own generic error page for a 5xx
+        # from the app instead of passing the body through, which is exactly why this chat
+        # error was showing as a bare "Sorry, I ran into an issue" with no real detail.
+        raise HTTPException(status_code=409, detail=str(e))

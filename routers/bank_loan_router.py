@@ -62,4 +62,4 @@ def generate_bank_loan_report(req: BankLoanRequest):
         raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.exception("bank-loan generation failed")
-        raise HTTPException(status_code=500, detail=f"Report generation failed: {e}")
+        raise HTTPException(status_code=409, detail=f"Report generation failed: {e}")

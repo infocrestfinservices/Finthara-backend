@@ -97,7 +97,7 @@ def generate_demo():
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("engine-test: demo generation failed")
-        raise HTTPException(status_code=500, detail=f"Engine test failed: {e}")
+        raise HTTPException(status_code=409, detail=f"Engine test failed: {e}")
 
 
 @router.post("/generate")
@@ -109,7 +109,7 @@ def generate(req: EngineTestRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("engine-test: generation failed")
-        raise HTTPException(status_code=500, detail=f"Engine test failed: {e}")
+        raise HTTPException(status_code=409, detail=f"Engine test failed: {e}")
 
 
 @router.get("/validate")
@@ -123,4 +123,4 @@ def validate():
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("engine-test: validate failed")
-        raise HTTPException(status_code=500, detail=f"Engine test failed: {e}")
+        raise HTTPException(status_code=409, detail=f"Engine test failed: {e}")

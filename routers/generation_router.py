@@ -843,7 +843,7 @@ def _load_model(project: Project) -> dict:
     try:
         return json.loads(report.financial_model)
     except (ValueError, TypeError):
-        raise HTTPException(status_code=500, detail="Stored financial model is corrupted. Re-generate the report.")
+        raise HTTPException(status_code=409, detail="Stored financial model is corrupted. Re-generate the report.")
 
 
 # 402 Payment Required, not 403: the caller is who they say they are and owns the project —

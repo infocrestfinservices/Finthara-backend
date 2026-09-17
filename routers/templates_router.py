@@ -98,7 +98,7 @@ async def upload_template(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("template upload failed")
-        raise HTTPException(status_code=500, detail=f"Could not register template: {e}")
+        raise HTTPException(status_code=409, detail=f"Could not register template: {e}")
     logger.info("template uploaded by user=%s -> %s (%s, %d fields)",
                 current_user.id, meta["template_id"], meta["engine"], meta["fields"])
     if meta["fields"] == 0:

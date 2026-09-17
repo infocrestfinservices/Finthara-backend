@@ -71,7 +71,7 @@ def run_full_analysis(request: AnalysisRequest, current_user: User = Depends(get
             report=report
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e))
 
 @router.post("/market")
 def run_market_research(request: AnalysisRequest, current_user: User = Depends(get_current_user)):
@@ -85,7 +85,7 @@ def run_market_research(request: AnalysisRequest, current_user: User = Depends(g
         )
         return {"result": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e))
 
 @router.post("/feasibility")
 def run_feasibility(request: AnalysisRequest, current_user: User = Depends(get_current_user)):
@@ -101,7 +101,7 @@ def run_feasibility(request: AnalysisRequest, current_user: User = Depends(get_c
         )
         return {"result": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e))
 
 @router.post("/swot")
 def run_swot(request: AnalysisRequest, current_user: User = Depends(get_current_user)):
@@ -114,4 +114,4 @@ def run_swot(request: AnalysisRequest, current_user: User = Depends(get_current_
         )
         return {"result": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e))
