@@ -92,12 +92,14 @@ def submit_contact(req: ContactRequest, request: Request):
                                     topic=(req.topic or None))
     except Exception:
         logger.exception("contact: could not send message from %s", req.email)
-        raise HTTPException(status_code=502,
+        # Not 502: App Platform's edge substitutes its own generic error page for a 5xx
+        # from the app instead of passing the body through. 409 reaches the browser intact.
+        raise HTTPException(status_code=409,
                             detail="Couldn't send your message. Please email us directly.")
 
     if not sent:
         # Email isn't configured on this server — tell the page so it shows the mailto: link.
-        raise HTTPException(status_code=503,
+        raise HTTPException(status_code=409,
                             detail=f"Please email us at {settings.COMPANY_EMAIL or settings.FROM_EMAIL}.")
 
     logger.info("contact: message from %s (topic=%s)", req.email, req.topic)

@@ -58,7 +58,9 @@ class OrderRequest(BaseModel):
 def create_order(req: OrderRequest, current_user: User = Depends(get_current_user),
                  db: Session = Depends(get_db)):
     if not settings.paypal_enabled:
-        raise HTTPException(status_code=503, detail="PayPal is not configured on this server.")
+        # Not 503 — App Platform's edge substitutes its own generic error page for a 503
+        # from the app instead of passing the body through. 409 reaches the browser intact.
+        raise HTTPException(status_code=409, detail="PayPal is not configured on this server.")
 
     plan_key = (req.plan or "").strip().lower()
     spec = PLANS.get(plan_key)
@@ -89,7 +91,7 @@ def create_order(req: OrderRequest, current_user: User = Depends(get_current_use
     except gw.PayPalError as e:
         logger.exception("paypal: could not create an order for user %s (payment %s)",
                          current_user.id, payment.id)
-        raise HTTPException(status_code=502, detail=f"Could not start the payment: {e}")
+        raise HTTPException(status_code=409, detail=f"Could not start the payment: {e}")
 
     payment.paypal_order_id = order["id"]
     db.commit()
@@ -188,7 +190,7 @@ def verify_payment(req: VerifyRequest, current_user: User = Depends(get_current_
     """Called by the frontend right after the buyer approves in the PayPal Buttons flow.
     Approval alone changes nothing here — this is what actually captures the money."""
     if not settings.paypal_enabled:
-        raise HTTPException(status_code=503, detail="PayPal is not configured.")
+        raise HTTPException(status_code=409, detail="PayPal is not configured.")
 
     payment = (db.query(Payment)
                 .filter(Payment.paypal_order_id == req.order_id)

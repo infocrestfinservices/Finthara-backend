@@ -85,7 +85,10 @@ class VerifyRequest(BaseModel):
 
 def _client():
     if not settings.payments_enabled:
-        raise HTTPException(status_code=503,
+        # Not 503: App Platform's edge substitutes its own generic error page for a 503
+        # from the app instead of passing the body through, which is exactly the message
+        # this exists to deliver. 409 reaches the browser untouched.
+        raise HTTPException(status_code=409,
                             detail="Payments are not configured on this server.")
     import razorpay
     return razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
@@ -170,7 +173,7 @@ def create_order(req: OrderRequest, current_user: User = Depends(get_current_use
         raise
     except Exception as e:
         logger.exception("payments: could not create an order for user %s", current_user.id)
-        raise HTTPException(status_code=502, detail=f"Could not start the payment: {e}")
+        raise HTTPException(status_code=409, detail=f"Could not start the payment: {e}")
 
     db.add(Payment(user_id=current_user.id, plan=req.plan.lower(),
                    amount=amount, amount_paise=paise, currency="INR",
@@ -198,7 +201,7 @@ def verify_payment(req: VerifyRequest, current_user: User = Depends(get_current_
                    db: Session = Depends(get_db)):
     """Check Razorpay's signature, then record the payment and move the user's plan."""
     if not settings.payments_enabled:
-        raise HTTPException(status_code=503, detail="Payments are not configured.")
+        raise HTTPException(status_code=409, detail="Payments are not configured.")
 
     payment = db.query(Payment).filter(
         Payment.razorpay_order_id == req.razorpay_order_id).first()
@@ -352,7 +355,7 @@ def start_subscription(req: SubscribeRequest, current_user: User = Depends(get_c
             status_code=400,
             detail=f"{req.plan} is not a monthly plan.")
     if not subs.enabled():
-        raise HTTPException(status_code=503, detail="Payments are not configured.")
+        raise HTTPException(status_code=409, detail="Payments are not configured.")
     allowed, why = can_purchase(db, current_user, plan)
     if not allowed:
         raise HTTPException(status_code=409, detail=why)
@@ -382,8 +385,11 @@ def start_subscription(req: SubscribeRequest, current_user: User = Depends(get_c
         # still grants exactly 30 days (entitlements.expiry_for decides that, not this
         # endpoint) — the customer simply has to renew by hand until auto-pay is live.
         logger.exception("payments: could not create a subscription for user %s", current_user.id)
+        # Not 503 — see the note on _client() above: App Platform's edge swallows the body
+        # of a 503 from the app and shows its own generic error page instead, which is
+        # exactly the auto_pay_unavailable message the frontend's fallback depends on.
         raise HTTPException(
-            status_code=503,
+            status_code=409,
             detail={"message": "Auto-pay is not available yet on this payment account.",
                     "auto_pay_unavailable": True,
                     "fallback": "one_time"})
@@ -422,7 +428,7 @@ def cancel_subscription(at_cycle_end: bool = True,
                                           timeout=15)
     except Exception:
         logger.exception("payments: cancel failed for %s", row.razorpay_subscription_id)
-        raise HTTPException(status_code=502, detail="Could not cancel with the payment provider.")
+        raise HTTPException(status_code=409, detail="Could not cancel with the payment provider.")
 
     row.cancel_at_cycle_end = bool(at_cycle_end)
     if not at_cycle_end:

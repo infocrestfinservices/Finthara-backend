@@ -57,8 +57,9 @@ def generate_bank_loan_report(req: BankLoanRequest):
             user_details=req.user_details,
         )
     except ValueError as e:
-        # unparseable AI JSON, or the template is not registered
-        raise HTTPException(status_code=502, detail=str(e))
+        # unparseable AI JSON, or the template is not registered. Not 502 — App Platform's
+        # edge substitutes its own generic error page for a 5xx from the app.
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         logger.exception("bank-loan generation failed")
         raise HTTPException(status_code=500, detail=f"Report generation failed: {e}")

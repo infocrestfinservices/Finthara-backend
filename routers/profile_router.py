@@ -101,7 +101,7 @@ async def request_email_change(req: ChangeEmailRequest,
         await send_verification_email(new_email, current_user.full_name, otp)
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=502,
+        raise HTTPException(status_code=409,
                              detail=f"Could not send the verification email. ({e})")
     db.commit()
 

@@ -106,7 +106,7 @@ def download_invoice(invoice_id: int, db: Session = Depends(get_db),
         data = invoice_pdf.render(inv)
     except Exception as e:
         logger.exception("invoices: PDF render failed for %s", inv.invoice_number)
-        raise HTTPException(status_code=502, detail=f"Could not build the PDF: {e}")
+        raise HTTPException(status_code=409, detail=f"Could not build the PDF: {e}")
     return StreamingResponse(
         BytesIO(data), media_type=PDF_MIME,
         headers={"Content-Disposition": f'attachment; filename="{inv.invoice_number}.pdf"'},

@@ -81,8 +81,11 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
         await send_verification_email(email, request.full_name, otp)
     except Exception as e:
         db.rollback()
+        # Not 502 — on App Platform, the edge substitutes its own generic error page for a
+        # 5xx from the app instead of passing the body through, so this message never
+        # reached the browser. 409 is treated as an ordinary client error and passes intact.
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
+            status_code=status.HTTP_409_CONFLICT,
             detail=f"Could not send the verification email. Please check the SMTP settings. ({e})",
         )
 
@@ -219,8 +222,11 @@ async def resend_otp(request: ResendOtpRequest, db: Session = Depends(get_db)):
         await send_verification_email(email, user.full_name, otp)
     except Exception as e:
         db.rollback()
+        # Not 502 — on App Platform, the edge substitutes its own generic error page for a
+        # 5xx from the app instead of passing the body through, so this message never
+        # reached the browser. 409 is treated as an ordinary client error and passes intact.
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
+            status_code=status.HTTP_409_CONFLICT,
             detail=f"Could not send the verification email. Please check the SMTP settings. ({e})",
         )
 

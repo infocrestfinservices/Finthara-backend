@@ -1042,8 +1042,10 @@ def _run_generation(db: Session, project: Project, req: GenerateRequest, prog=No
         # Never ship the untouched sample: if the AI produced no values (and the
         # user supplied none), fail loudly instead of returning the sample as-is.
         if not ai_inputs and not user_cells:
+            # Not 502 — App Platform's edge substitutes its own generic error page for a
+            # 5xx from the app instead of passing this message through.
             raise HTTPException(
-                status_code=502,
+                status_code=409,
                 detail="AI could not generate the financial-model inputs for this template. Please try again.",
             )
         answers = {**ai_inputs, **answers}  # user-provided "Sheet!Cell" values win
@@ -1144,7 +1146,8 @@ def _run_generation(db: Session, project: Project, req: GenerateRequest, prog=No
                                              agent_context, sample_blueprint=sample_blueprint,
                                              user_instructions=user_ask)
         except Exception as e:
-            raise HTTPException(status_code=502, detail=f"Model generation failed: {e}")
+            # Not 502 — see the note above on the AI-inputs failure.
+            raise HTTPException(status_code=409, detail=f"Model generation failed: {e}")
 
     # Workbook annex — the SWOT and Conclusion sheets. Parse the SWOT already produced
     # in agent_context (no second LLM call) and synthesise a figures-grounded
@@ -1267,7 +1270,7 @@ def download_excel(project: Project = Depends(get_owned_project), db: Session = 
             raise
         except Exception as e:
             logger.exception("excel: short workbook failed for project %s", project.id)
-            raise HTTPException(status_code=502, detail=f"Short workbook failed: {e}")
+            raise HTTPException(status_code=409, detail=f"Short workbook failed: {e}")
         return StreamingResponse(
             BytesIO(data), media_type=XLSX_MIME,
             headers={"Content-Disposition":
@@ -1316,7 +1319,7 @@ def download_excel(project: Project = Depends(get_owned_project), db: Session = 
             # fill_template validates the workbook and raises on any corruption,
             # so we return an error rather than ever streaming a broken file.
             logger.exception("excel: template fill failed for project %s", project.id)
-            raise HTTPException(status_code=502, detail=f"Template fill failed: {e}")
+            raise HTTPException(status_code=409, detail=f"Template fill failed: {e}")
         # Serve the RECALCULATED workbook so it already carries computed values, not
         # just formulas. Non-fatal: if LibreOffice is unavailable we serve the filled
         # file and Excel recomputes on open (fullCalcOnLoad is set).
@@ -1449,7 +1452,7 @@ def download_word(project: Project = Depends(get_owned_project), db: Session = D
         data, base = _build_word_report(project, db)
     except Exception as e:
         logger.exception("word: report build failed for project %s", project.id)
-        raise HTTPException(status_code=502, detail=f"Word report failed: {e}")
+        raise HTTPException(status_code=409, detail=f"Word report failed: {e}")
     return StreamingResponse(BytesIO(data), media_type=DOCX_MIME,
                              headers={"Content-Disposition": f'attachment; filename="{base}.docx"'})
 
@@ -1463,13 +1466,13 @@ def download_pdf(project: Project = Depends(get_owned_project), db: Session = De
     from services.recalc_service import to_pdf, libreoffice_available
     if not libreoffice_available():
         raise HTTPException(
-            status_code=503,
+            status_code=409,
             detail="PDF export needs LibreOffice on the server (set LIBREOFFICE_PATH).")
     try:
         word, base = _build_word_report(project, db)
         data = to_pdf(word, "docx")
     except Exception as e:
         logger.exception("pdf: export failed for project %s", project.id)
-        raise HTTPException(status_code=502, detail=f"PDF export failed: {e}")
+        raise HTTPException(status_code=409, detail=f"PDF export failed: {e}")
     return StreamingResponse(BytesIO(data), media_type="application/pdf",
                              headers={"Content-Disposition": f'attachment; filename="{base}.pdf"'})
