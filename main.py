@@ -1,8 +1,10 @@
+import logging
 import secrets
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from config import settings
@@ -126,6 +128,25 @@ app.include_router(contact_router)
 
 if not IS_PRODUCTION:
     app.include_router(engine_test_router)
+
+
+# Safety net for a bug nobody has written a specific except-clause for yet. Starlette's own
+# default for an unhandled exception is a bare 500, and on this host that is indistinguishable
+# from a dead server: App Platform's edge substitutes its own generic "Error code: 502" page
+# for any 5xx the app returns instead of forwarding the body (confirmed from Runtime Logs —
+# see the individual routers, which were all switched from 502/503/500 to 409 one exception at
+# a time before this existed). This is the catch-all so the NEXT uncaught crash — wherever it
+# turns out to be — reaches the browser as a real, readable error instead of a blank platform
+# page, without having to find it by hand first. It only fires for exceptions nothing more
+# specific has already turned into an HTTPException, so every deliberate status code in the
+# routers above is unaffected.
+logger = logging.getLogger("unhandled")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=409, content={"detail": "Something went wrong. Please try again."})
 
 
 @app.on_event("startup")
