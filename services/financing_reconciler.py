@@ -343,8 +343,17 @@ def reconcile_identity(answers: dict, project) -> dict:
     if not isinstance(answers, dict):
         return answers
     out = dict(answers)
+    # "Line of Activity" is a short descriptive phrase in CMA format (e.g. "Dairy
+    # farming - milk production and processing"), not the full multi-sentence project
+    # brief. The Word report already uses sub_industry/industry for the same label
+    # (word_builder.py's "Line of activity" fact); feeding the long description into
+    # this single grid cell instead produced a mid-sentence "…" cut-off. Match Word's
+    # source, and only fall back to a (truncated) description when neither is set.
+    activity_value = (getattr(project, "sub_industry", None)
+                       or getattr(project, "industry", None)
+                       or getattr(project, "project_description", None))
     for cell, value in ((_NAME_CELL, getattr(project, "title", None)),
-                        (_ACTIVITY_CELL, getattr(project, "project_description", None))):
+                        (_ACTIVITY_CELL, activity_value)):
         if isinstance(value, str) and value.strip():
             v = value.strip()
             if cell == _ACTIVITY_CELL and len(v) > 90:      # keep the cell readable
