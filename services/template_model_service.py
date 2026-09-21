@@ -293,7 +293,13 @@ def _industry_profile_context(project: dict) -> str:
         "  - The 'raw material cost per unit' cell is this industry's main per-unit cost "
         "of goods (for trading/retail, the purchase cost of the item, typically the price "
         "minus the gross margin). The 'second/power cost per unit' cell is the next "
-        "per-unit variable cost (packaging, freight, gateway); use 0 if none applies.")
+        "per-unit variable cost THIS INDUSTRY actually incurs — power & fuel for a hotel "
+        "or factory, kitchen fuel for a restaurant, packaging & freight for a trader. Fill "
+        "a realistic non-zero figure for it in almost every case; leave it 0 ONLY when the "
+        "cost genuinely does not exist for this specific business (e.g. a pure software "
+        "company has no packaging cost). Never leave this at 0 while giving it a non-zero "
+        "escalation rate — an escalating cost that starts at zero stays zero forever, which "
+        "is never what an escalation rate means.")
     lines.append(
         "  - Skip genuine factory-only overheads (factory overhead, plant & machinery) "
         "only where the business truly has none.")

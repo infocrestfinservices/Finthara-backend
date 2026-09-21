@@ -323,6 +323,23 @@ def _num_or_none(v):
         return None
 
 
+def _style_overrides_for(project: Project) -> dict:
+    """Cells whose number format must be borrowed from elsewhere in the same sheet for
+    this project's industry — see fill_template's `style_overrides` docstring. Currently
+    just the gross-margin cell: Assumptions!C25 is a ₹/unit raw-material cost in the
+    template's own baked-in format, but reconcile_working_capital() fills it as a 0-1
+    fraction for the volume_price family, which needs to DISPLAY as a percentage. C18 is
+    already formatted "0.0%" and lives on the same sheet, so C25 borrows it."""
+    try:
+        from financial_engine.industry_calc.operating_models import get_operating_model
+        fam = getattr(get_operating_model(getattr(project, "industry", "") or ""), "family", "")
+    except Exception:
+        fam = ""
+    if fam == "volume_price":
+        return {"Assumptions!C25": "Assumptions!C18"}
+    return {}
+
+
 def _reconcile_all(answers: dict, project: Project, template=None) -> dict:
     """The deterministic post-AI guard chain, in the one order that is correct.
 
@@ -1081,7 +1098,8 @@ def _run_generation(db: Session, project: Project, req: GenerateRequest, prog=No
             try:
                 _p(62, "Calculating the projections")
                 recalc = recalculate_xlsx(optional_sheets.apply(
-                    fill_template(tpurpose, template["id"], answers), answers))
+                    fill_template(tpurpose, template["id"], answers,
+                                 style_overrides=_style_overrides_for(project)), answers))
                 kpis = extract_kpis(recalc, analysis)
                 if not kpis and legacy_kpis:            # legacy hand-wired templates
                     kpis = read_computed_kpis(tschema, recalc)
@@ -1314,7 +1332,8 @@ def download_excel(project: Project = Depends(get_owned_project), db: Session = 
             answers = _reconcile_all(answers, project, template)
         try:
             data = optional_sheets.apply(
-                fill_template(tpurpose, template["id"], answers), answers)
+                fill_template(tpurpose, template["id"], answers,
+                             style_overrides=_style_overrides_for(project)), answers)
         except Exception as e:
             # fill_template validates the workbook and raises on any corruption,
             # so we return an error rather than ever streaming a broken file.

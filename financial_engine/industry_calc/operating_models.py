@@ -188,6 +188,8 @@ _add(OperatingModel("retail", "Retail & E-Commerce", "volume_price",
     default_segments=(("Walk-in retail customers", 0.55),
                       ("Online / marketplace buyers", 0.30),
                       ("Bulk / institutional buyers", 0.15)),
+    stream_labels=("Installation & fitting services", "AMC / warranty services",
+                  "Gift wrapping & value-added services", "Other operating income"),
     holds_inventory=True))
 _add(OperatingModel("restaurant", "Food & Beverage / Restaurant", "volume_price",
     "Covers served", "Average order value", "Food & beverage cost",
@@ -200,6 +202,8 @@ _add(OperatingModel("restaurant", "Food & Beverage / Restaurant", "volume_price"
     default_segments=(("Dine-in guests", 0.60),
                       ("Takeaway & delivery", 0.28),
                       ("Catering & events", 0.12)),
+    stream_labels=("Bar & beverages", "Takeaway & delivery",
+                  "Catering & private events", "Other operating income"),
     holds_inventory=True))
 _add(OperatingModel("hotel", "Tourism & Hospitality", "volume_price",
     "Room-nights sold", "Average room tariff (ARR)", "Cost of services",
@@ -212,6 +216,12 @@ _add(OperatingModel("hotel", "Tourism & Hospitality", "volume_price",
     default_segments=(("Leisure travellers", 0.50),
                       ("Corporate & MICE clients", 0.32),
                       ("Group & event bookings", 0.18)),
+    # volume_price industries borrow the same manufacturing streams block as the
+    # capacity family does — without these, a hotel's four ancillary rows still
+    # read "By-product / scrap sales", "Job work / contract manufacturing", etc.
+    # In stream_mix/stream_vol_per_core order: F&B, banquets, weddings, other.
+    stream_labels=("Food & beverage", "Banquets & conferences",
+                  "Weddings & celebrations", "Other operating income"),
     holds_inventory=True))
 _add(OperatingModel("software", "Technology & Software", "volume_price",
     "Active subscribers", "ARPU (per subscriber / year)", "Cost of revenue (hosting, support)",
@@ -224,6 +234,8 @@ _add(OperatingModel("software", "Technology & Software", "volume_price",
     default_segments=(("SMB subscribers", 0.45),
                       ("Enterprise accounts", 0.40),
                       ("Individual / self-serve users", 0.15)),
+    stream_labels=("Onboarding & implementation", "Professional services",
+                  "Annual maintenance contracts (AMC)", "Other operating income"),
     holds_inventory=False))
 _add(OperatingModel("hospital", "Healthcare & Pharma", "volume_price",
     "Patients treated (OPD/IPD)", "Average treatment charge", "Cost of medical services",
@@ -236,6 +248,8 @@ _add(OperatingModel("hospital", "Healthcare & Pharma", "volume_price",
     default_segments=(("OPD patients", 0.45),
                       ("IPD / inpatients", 0.40),
                       ("Insurance & corporate tie-ups", 0.15)),
+    stream_labels=("Pharmacy sales", "Diagnostics & lab services",
+                  "Ambulance & other patient services", "Other operating income"),
     holds_inventory=True))
 _add(OperatingModel("education", "Education & Training", "volume_price",
     "Students enrolled", "Fee per student (year)", "Cost of delivery",
@@ -247,6 +261,8 @@ _add(OperatingModel("education", "Education & Training", "volume_price",
     default_segments=(("Regular full-time students", 0.55),
                       ("Working professionals / part-time", 0.30),
                       ("Corporate & institutional training", 0.15)),
+    stream_labels=("Study material & course kits", "Hostel & accommodation fees",
+                  "Certification & exam fees", "Other operating income"),
     holds_inventory=False))
 _add(OperatingModel("trading", "Import / Export Trading", "volume_price",
     "Units traded", "Realisation / unit", "Cost of goods traded",
@@ -259,6 +275,8 @@ _add(OperatingModel("trading", "Import / Export Trading", "volume_price",
     default_segments=(("Domestic wholesale buyers", 0.50),
                       ("Export clients", 0.35),
                       ("Retail / small orders", 0.15)),
+    stream_labels=("Freight forwarding services", "Warehousing & handling",
+                  "Documentation & customs clearance", "Other operating income"),
     holds_inventory=True))
 _add(OperatingModel("transport", "Transportation & Logistics", "volume_price",
     "Trips / consignments", "Revenue per trip", "Operating cost of services",
@@ -270,6 +288,8 @@ _add(OperatingModel("transport", "Transportation & Logistics", "volume_price",
     default_segments=(("Contract / corporate clients", 0.55),
                       ("Spot-market consignments", 0.30),
                       ("E-commerce & last-mile", 0.15)),
+    stream_labels=("Warehousing & handling", "Packaging & value-added services",
+                  "Vehicle leasing / hire", "Other operating income"),
     holds_inventory=False))
 _add(OperatingModel("media", "Media & Entertainment", "volume_price",
     "Units sold / subscribers", "Average revenue per unit", "Cost of content / services",
@@ -282,6 +302,8 @@ _add(OperatingModel("media", "Media & Entertainment", "volume_price",
     default_segments=(("Advertisers & sponsors", 0.45),
                       ("Subscribers / viewers", 0.40),
                       ("Licensing partners", 0.15)),
+    stream_labels=("Advertising income", "Licensing & syndication",
+                  "Merchandise & sponsorships", "Other operating income"),
     holds_inventory=False))
 # The catch-all — and, since the lookup started falling back to it, the model that every
 # UNRECOGNISED business runs on: consulting, legal, agency, salon, gym, fintech, events.
@@ -299,6 +321,8 @@ _add(OperatingModel("other", "General Business", "volume_price",
     default_segments=(("Primary customer segment", 0.55),
                       ("Secondary customer segment", 0.30),
                       ("Other customers", 0.15)),
+    stream_labels=("Value-added services", "Service contracts / AMC",
+                  "Ancillary product sales", "Other operating income"),
     holds_inventory=True))
 
 

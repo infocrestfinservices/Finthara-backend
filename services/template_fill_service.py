@@ -117,9 +117,22 @@ def _sheet_name_to_path(zf: zipfile.ZipFile) -> dict:
     return name_to_path
 
 
-def _set_cell_xml(sheet_xml: str, cell_ref: str, kind: str, value) -> tuple:
+def _cell_style_index(sheet_xml: str, cell_ref: str) -> str | None:
+    """The `s` (style index) attribute of a cell, or None if it has none/doesn't exist."""
+    m = re.search(r'<c\b[^>]*\br="%s"[^>]*?(?:/>|>)' % re.escape(cell_ref), sheet_xml)
+    if not m:
+        return None
+    sm = re.search(r'\bs="([^"]*)"', m.group(0))
+    return sm.group(1) if sm else None
+
+
+def _set_cell_xml(sheet_xml: str, cell_ref: str, kind: str, value, style_index: str | None = None) -> tuple:
     """Overwrite one cell's value inside a worksheet XML string, preserving the
-    cell's style (`s`) attribute. Returns (new_xml, changed?)."""
+    cell's style (`s`) attribute — unless `style_index` is given, which borrows
+    another cell's number format (see `style_overrides` on `fill_template`, used
+    when the same input cell means a different kind of number for a different
+    industry, e.g. a 0-1 fraction that must show as "%" rather than "₹/unit").
+    Returns (new_xml, changed?)."""
     # Match the whole <c r="C7" ...>...</c> element (or self-closing <c .../>).
     pattern = re.compile(
         r'(<c\b[^>]*\br="%s"[^>]*?)(/>|>.*?</c>)' % re.escape(cell_ref),
@@ -130,6 +143,11 @@ def _set_cell_xml(sheet_xml: str, cell_ref: str, kind: str, value) -> tuple:
         opening = m.group(1)
         # Drop any existing type attribute; we set the type explicitly below.
         opening = re.sub(r'\s+t="[^"]*"', "", opening)
+        if style_index is not None:
+            if re.search(r'\bs="[^"]*"', opening):
+                opening = re.sub(r'\bs="[^"]*"', f's="{style_index}"', opening)
+            else:
+                opening = f'{opening} s="{style_index}"'
         if kind == "str":
             return f'{opening} t="inlineStr"><is><t xml:space="preserve">{escape(str(value))}</t></is></c>'
         return f"{opening}><v>{value}</v></c>"
@@ -151,9 +169,19 @@ def _set_full_calc_on_load(wb_xml: str) -> str:
     return wb_xml.replace("</workbook>", '<calcPr calcId="0" fullCalcOnLoad="1"/></workbook>')
 
 
-def fill_template(purpose_key: str, template_id: str, answers: dict) -> bytes:
+def fill_template(purpose_key: str, template_id: str, answers: dict,
+                  style_overrides: dict[str, str] | None = None) -> bytes:
     """Return .xlsx/.xlsm bytes for the template with `answers` written into its
     input cells and everything else preserved. `answers` maps "Sheet!Cell" -> value.
+
+    `style_overrides` (optional) maps a target "Sheet!Cell" to a source "Sheet!Cell"
+    IN THE SAME SHEET whose number format it should borrow instead of keeping its own.
+    The universal template reuses some input cells for a different kind of number
+    depending on industry (e.g. Assumptions!C25 is a ₹/unit raw-material cost for a
+    factory but a 0-1 gross-margin fraction for a hotel) — the cell's own baked-in
+    format is only ever right for one of those, so the caller borrows a format from a
+    cell that already displays the OTHER kind correctly (e.g. Assumptions!C18, already
+    formatted as "0.0%").
 
     Raises FileNotFoundError if the template is missing.
     """
@@ -170,8 +198,11 @@ def fill_template(purpose_key: str, template_id: str, answers: dict) -> bytes:
             for f in g.get("fields", []):
                 types[field_key(g["sheet"], f["cell"])] = f.get("type", "number")
 
+    style_overrides = style_overrides or {}
+
     with zipfile.ZipFile(path, "r") as zin:
         name_to_path = _sheet_name_to_path(zin)
+        name_to_path_rev = {v: k for k, v in name_to_path.items()}
 
         # Group the target cells by the sheet XML part they live in.
         edits = {}  # sheet_xml_path -> list of (cell_ref, kind, value)
@@ -192,7 +223,15 @@ def fill_template(purpose_key: str, template_id: str, answers: dict) -> bytes:
         for spath, cells in edits.items():
             xml = zin.read(spath).decode("utf-8")
             for cell_ref, kind, value in cells:
-                xml, _ = _set_cell_xml(xml, cell_ref, kind, value)
+                style_index = None
+                override_key = f"{name_to_path_rev.get(spath)}!{cell_ref}" if style_overrides else None
+                source_key = style_overrides.get(override_key) if override_key else None
+                if source_key and "!" in source_key:
+                    src_sheet, src_cell = source_key.rsplit("!", 1)
+                    src_spath = name_to_path.get(src_sheet)
+                    if src_spath == spath:  # same-sheet borrow only — see docstring
+                        style_index = _cell_style_index(xml, src_cell)
+                xml, _ = _set_cell_xml(xml, cell_ref, kind, value, style_index=style_index)
             modified[spath] = xml.encode("utf-8")
 
         wb_path = "xl/workbook.xml"

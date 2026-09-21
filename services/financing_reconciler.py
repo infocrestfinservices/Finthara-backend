@@ -154,6 +154,9 @@ _GROWTH_CELLS = [f"Assumptions!{c}18" for c in "CDEFG"]
 # (Year 1 = 100%)", so year 3 of a growing business reads 1.32, never 0.15.
 _GROWTH_RATE_CEILING = 0.5
 _GROSS_MARGIN_CELL = "Assumptions!C25"
+_GROSS_MARGIN_LABEL_CELL = "Assumptions!H25"   # unit label; "₹/unit" for capacity, "%" here
+_SECOND_COST_CELL = "Assumptions!C27"              # power & fuel / kitchen fuel / packaging...
+_SECOND_COST_ESCALATION_CELL = "Assumptions!C28"
 
 
 def reconcile_working_capital(answers: dict, project) -> dict:
@@ -235,6 +238,11 @@ def reconcile_working_capital(answers: dict, project) -> dict:
     if fam == "volume_price":
         model = get_operating_model(getattr(project, "industry", "") or "")
         band = getattr(model, "margin_hint", None)
+        # The cell's own label/unit ("₹/unit") is the capacity family's raw-material-cost
+        # wording — for volume_price it means gross margin, i.e. a percentage. The NUMBER
+        # format is a separate fix (see fill_template's style_overrides, wired from the
+        # generation router, which borrows Assumptions!C18's "0.0%" format for this cell).
+        out[_GROSS_MARGIN_LABEL_CELL] = "% of revenue"
         m = _num(out.get(_GROSS_MARGIN_CELL))
         if m is not None and not (0 < m <= 1):
             fixed = m / 100 if 1 < m <= 100 else 0.6   # 60 -> 0.60; anything wilder -> default
@@ -256,6 +264,21 @@ def reconcile_working_capital(answers: dict, project) -> dict:
                         round(m * 100, 1), model.key, getattr(model, "display_name", ""),
                         round(fixed * 100, 1))
             out[_GROSS_MARGIN_CELL] = round(fixed, 4)
+
+    # 4. The second per-unit cost (power & fuel / kitchen fuel / packaging, depending on
+    #    industry) with an escalation rate but a zero base. An escalating cost that starts
+    #    at 0 stays 0 forever — the expense line then shows ₹0 in every year regardless of
+    #    what C28 says, which reads as "this business pays nothing for power" even when the
+    #    prompt (see template_model_service.py) told the AI it almost always applies.
+    #    There is no safe rupee figure to invent here, so this only clears the escalation
+    #    to match a genuine zero rather than leaving the two cells contradicting each other.
+    base = _num(out.get(_SECOND_COST_CELL))
+    esc = _num(out.get(_SECOND_COST_ESCALATION_CELL))
+    if (base is None or base == 0) and esc:
+        logger.info("working-capital: %s escalation %.4f with a zero base cost; "
+                    "clearing the escalation instead of compounding nothing",
+                    _SECOND_COST_ESCALATION_CELL, esc)
+        out[_SECOND_COST_ESCALATION_CELL] = 0
 
     return out
 
@@ -618,11 +641,16 @@ def relabel_streams(answers: dict, project) -> dict:
     volume, price and formula is untouched, so the model this produces is arithmetically
     identical to the one produced without it.
 
-    Applies ONLY to the capacity family, because only those industries borrow the
-    manufacturing workbook and only that workbook has this row layout. An industry with its
-    own template already names its own streams and is never touched, and an industry that
-    declares no `stream_labels` (manufacturing itself, textile, automobile — genuine
-    factories, for whom scrap and job work are exactly right) keeps the workbook's wording.
+    Every industry — capacity AND volume_price alike — is filled onto the one universal
+    workbook (there is no separate per-industry template in the live pipeline), so every
+    industry shares this row layout and can need relabelling. This used to be gated to
+    `family == "capacity"` on the premise that volume_price industries had their own
+    template and were "never touched" — that premise was false: a hotel report shipped
+    with its four ancillary rows still reading "By-product / scrap sales", "Job work /
+    contract manufacturing" and so on. The only real gate is whether the industry HAS
+    `stream_labels` at all — manufacturing itself, textile and automobile deliberately
+    declare none (genuine factories, for whom scrap and job work are exactly right) and
+    keep the workbook's wording.
     """
     if not isinstance(answers, dict):
         return answers
@@ -633,7 +661,7 @@ def relabel_streams(answers: dict, project) -> dict:
     except Exception:
         return out
     labels = getattr(m, "stream_labels", None) if m else None
-    if not m or not labels or m.family != "capacity":
+    if not m or not labels:
         return out
 
     for cell, pattern in _STREAM_LABEL_CELLS:
