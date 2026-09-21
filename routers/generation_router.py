@@ -374,7 +374,8 @@ def _reconcile_all(answers: dict, project: Project, template=None) -> dict:
                                                reconcile_capex, reconcile_working_capital,
                                                reconcile_streams, reconcile_operating_costs,
                                                reconcile_drivers, reconcile_existing_loan,
-                                               relabel_streams)
+                                               relabel_streams, reconcile_headcount,
+                                               reconcile_gestation)
     # First: without numeric year/month drivers every projected cell evaluates to
     # #VALUE!, and nothing downstream can be judged.
     answers = reconcile_drivers(answers, project)
@@ -384,6 +385,10 @@ def _reconcile_all(answers: dict, project: Project, template=None) -> dict:
     answers = reconcile_financing(answers, project)
     answers = reconcile_capex(answers, project)
     answers = reconcile_working_capital(answers, project)
+    # C32 (direct wages) is now a formula over D32 (headcount) x E32 (avg cost/employee)
+    # — see reconcile_operating_costs below, which reads their product — so both must be
+    # numeric before the scale/streams/labour loop runs.
+    answers = reconcile_headcount(answers, project)
     # Scale, streams and labour are MUTUALLY dependent, and running them once in a line is
     # not enough. The volume is solved from the fixed costs; the streams are sized off the
     # volume; the wage bill is pegged to the revenue the streams complete — and that wage
@@ -414,6 +419,9 @@ def _reconcile_all(answers: dict, project: Project, template=None) -> dict:
     answers = relabel_streams(answers, project)
     answers = reconcile_segments(answers, project)
     answers = reconcile_phasing(answers, project)
+    # Runs last so a construction/gestation period overrides whatever ramp or seasonal
+    # pattern reconcile_phasing just set for those months, rather than being overridden by it.
+    answers = reconcile_gestation(answers, project)
     return answers
 
 

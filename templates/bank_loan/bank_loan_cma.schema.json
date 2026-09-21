@@ -147,6 +147,13 @@
           "type": "percent"
         },
         {
+          "cell": "O21",
+          "label": "Construction / gestation period before revenue starts (months, 0-11)",
+          "hint": "How many months of Year 1 are spent building/setting up before the business can sell anything. 0 if operations start immediately (an existing unit expanding, for example).",
+          "default": 0,
+          "type": "number"
+        },
+        {
           "cell": "C21",
           "label": "→ weights (e.g. 1.0 each, or seasonal) — M1",
           "hint": "",
@@ -287,9 +294,16 @@
           "type": "percent"
         },
         {
-          "cell": "C32",
-          "label": "Direct wages & salaries / month (Year 1)",
-          "hint": "",
+          "cell": "D32",
+          "label": "Headcount — total number of employees (Year 1)",
+          "hint": "All roles combined (management, operations, support). Direct wages & salaries / month is computed as headcount x average cost per employee, not entered directly.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "E32",
+          "label": "Average cost per employee / month (₹, all-in)",
+          "hint": "Salary plus PF/ESI/benefits, averaged across all roles and levels.",
           "default": null,
           "type": "number"
         },
@@ -525,6 +539,20 @@
           "hint": "Revenue for this stream = volume x price."
         },
         {
+          "cell": "E66",
+          "type": "percent",
+          "default": null,
+          "label": "By-product / scrap sales — annual price escalation",
+          "hint": "This stream's own yearly price growth. Does not have to match the core product's."
+        },
+        {
+          "cell": "F66",
+          "type": "percent",
+          "default": null,
+          "label": "By-product / scrap sales — annual volume growth",
+          "hint": "This stream's own yearly volume growth. Does not have to match the core product's."
+        },
+        {
           "cell": "C67",
           "type": "number",
           "default": null,
@@ -537,6 +565,20 @@
           "default": null,
           "label": "Job work / contract manufacturing — average price per unit",
           "hint": "Revenue for this stream = volume x price."
+        },
+        {
+          "cell": "E67",
+          "type": "percent",
+          "default": null,
+          "label": "Job work / contract manufacturing — annual price escalation",
+          "hint": "This stream's own yearly price growth. Does not have to match the core product's."
+        },
+        {
+          "cell": "F67",
+          "type": "percent",
+          "default": null,
+          "label": "Job work / contract manufacturing — annual volume growth",
+          "hint": "This stream's own yearly volume growth. Does not have to match the core product's."
         },
         {
           "cell": "C68",
@@ -553,6 +595,20 @@
           "hint": "Revenue for this stream = volume x price."
         },
         {
+          "cell": "E68",
+          "type": "percent",
+          "default": null,
+          "label": "Trading of bought-out items — annual price escalation",
+          "hint": "This stream's own yearly price growth. Does not have to match the core product's."
+        },
+        {
+          "cell": "F68",
+          "type": "percent",
+          "default": null,
+          "label": "Trading of bought-out items — annual volume growth",
+          "hint": "This stream's own yearly volume growth. Does not have to match the core product's."
+        },
+        {
           "cell": "C69",
           "type": "number",
           "default": null,
@@ -565,6 +621,20 @@
           "default": null,
           "label": "Other operating income — average price per unit",
           "hint": "Revenue for this stream = volume x price."
+        },
+        {
+          "cell": "E69",
+          "type": "percent",
+          "default": null,
+          "label": "Other operating income — annual price escalation",
+          "hint": "This stream's own yearly price growth. Does not have to match the core product's."
+        },
+        {
+          "cell": "F69",
+          "type": "percent",
+          "default": null,
+          "label": "Other operating income — annual volume growth",
+          "hint": "This stream's own yearly volume growth. Does not have to match the core product's."
         },
         {
           "cell": "C72",

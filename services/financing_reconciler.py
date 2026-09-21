@@ -911,7 +911,6 @@ def reconcile_drivers(answers: dict, project) -> dict:
     return out
 
 
-_WAGES_CELL = "Assumptions!C32"          # direct wages & salaries, per MONTH
 _GM_CELL = "Assumptions!C25"             # gross margin (volume_price family)
 _OTHER_FIXED = ("Assumptions!C34", "Assumptions!C36", "Assumptions!C38")
 _SELLING_CELL = "Assumptions!C40"
@@ -957,9 +956,14 @@ def reconcile_operating_costs(answers: dict, project) -> dict:
     streams = sum((_num(out.get(v)) or 0.0) * (_num(out.get(p)) or 0.0)
                   for v, p in zip(_STREAM_VOL_CELLS, _STREAM_PRICE_CELLS))
     revenue = core + streams
-    wages = _num(out.get(_WAGES_CELL))
-    if revenue <= 0 or wages is None:
+    # C32 is now the FORMULA '=D32*E32' (headcount x avg cost/employee — bug 12), not a
+    # value of its own; reconcile_headcount runs before this and guarantees both are
+    # numeric, so wages is read as their product rather than read from C32 directly.
+    headcount = _num(out.get(_HEADCOUNT_CELL))
+    avg_cost = _num(out.get(_AVG_COST_CELL))
+    if revenue <= 0 or headcount is None or headcount <= 0 or avg_cost is None:
         return out
+    wages = headcount * avg_cost
 
     pct = (wages * 12.0) / revenue
     target = lo if pct < lo else (hi if pct > hi else None)
@@ -986,10 +990,14 @@ def reconcile_operating_costs(answers: dict, project) -> dict:
                     100.0 * new_annual / revenue, 100.0 * target)
     if new_annual <= 0 or abs(new_annual - current_annual) < 1:
         return out
-    out[_WAGES_CELL] = round(new_annual / 12.0)
-    logger.info("labour: %s wages %.1f%% of revenue -> %.1f%% (band %.0f-%.0f%%)",
+    # Headcount is the real business decision (how many people were hired); the clamp
+    # adjusts what they're PAID, not how many there are, so D32 (headcount) is left alone
+    # and only E32 (avg cost/employee) moves.
+    out[_AVG_COST_CELL] = round(new_annual / 12.0 / headcount, 2)
+    logger.info("labour: %s wages %.1f%% of revenue -> %.1f%% (band %.0f-%.0f%%), "
+                "avg cost/employee %.0f -> %.0f at %d headcount",
                 m.display_name, 100.0 * pct, 100.0 * new_annual / revenue,
-                100.0 * lo, 100.0 * hi)
+                100.0 * lo, 100.0 * hi, avg_cost, out[_AVG_COST_CELL], headcount)
     return out
 
 
@@ -1092,6 +1100,73 @@ def reconcile_phasing(answers: dict, project) -> dict:
         answers[k] = w
     logger.info("phasing: applied gentle monthly ramp (family=%r, annual unchanged)", family)
     return answers
+
+
+_GESTATION_CELL = "Assumptions!O21"
+_PHASING_COLS = "CDEFGHIJKLMN"
+_PHASING_CELLS = [f"Assumptions!{c}21" for c in _PHASING_COLS]
+
+
+def reconcile_gestation(answers: dict, project) -> dict:
+    """Zero the monthly phasing weight for each month inside the construction /
+    gestation period (Assumptions!O21), so a business still being built shows no
+    revenue for those months instead of selling at full tilt from day one.
+
+    Every OTHER month's weight is left exactly as reconcile_phasing set it — this
+    only zeroes the gestation months on top, it does not redistribute their share
+    onto the remaining months. Production!B7's own MIN(installed capacity / 12, ...)
+    cap is what keeps that from being undone: it stops any month producing more
+    than one-twelfth of the ANNUAL installed capacity no matter how large that
+    month's weight computes to, so a zeroed month is a genuine 1/12 of annual
+    volume lost, not volume the other months quietly make up. Applies to every
+    industry — a construction delay is not an industry-specific idea, unlike the
+    capacity/volume-price distinction most of this file works around.
+    """
+    if not isinstance(answers, dict):
+        return answers
+    months = _num(answers.get(_GESTATION_CELL))
+    if not months or months <= 0:
+        return answers
+    months = min(11, int(round(months)))   # never all 12 — nothing left to model
+    out = dict(answers)
+    for i, cell in enumerate(_PHASING_CELLS):
+        if i < months:
+            out[cell] = 0
+    logger.info("gestation: zeroed the first %d month(s) of phasing weights (O21=%s)",
+                months, months)
+    return out
+
+
+_HEADCOUNT_CELL = "Assumptions!D32"
+_AVG_COST_CELL = "Assumptions!E32"
+# Generic fallback when the AI leaves both blank — a small unit's typical staffing.
+# Only used as a last resort; reconcile_operating_costs (below) then pulls the
+# TOTAL into the industry's labour_pct band, which is what actually sizes it.
+_DEFAULT_HEADCOUNT = 5
+_DEFAULT_AVG_COST = 25000.0
+
+
+def reconcile_headcount(answers: dict, project) -> dict:
+    """Make sure Assumptions!D32 (headcount) and E32 (avg cost/employee) are both
+    usable numbers, since C32 is now the FORMULA '=D32*E32' (see the template fix
+    for bug 12) rather than a value the AI fills directly — a blank or zero D32
+    would make the whole wages line zero regardless of what E32 says, the same
+    failure mode bug 3's power/fuel guard exists for.
+    """
+    if not isinstance(answers, dict):
+        return answers
+    out = dict(answers)
+    hc = _num(out.get(_HEADCOUNT_CELL))
+    cost = _num(out.get(_AVG_COST_CELL))
+    if hc is None or hc <= 0:
+        out[_HEADCOUNT_CELL] = _DEFAULT_HEADCOUNT
+        hc = _DEFAULT_HEADCOUNT
+        logger.info("headcount: D32 missing/zero; defaulted to %d employees", hc)
+    if cost is None or cost <= 0:
+        out[_AVG_COST_CELL] = _DEFAULT_AVG_COST
+        logger.info("headcount: E32 missing/zero; defaulted to Rs %.0f / employee / month",
+                    _DEFAULT_AVG_COST)
+    return out
 
 
 def financing_check(answers: dict, project) -> dict:
