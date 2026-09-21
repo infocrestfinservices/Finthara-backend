@@ -100,7 +100,7 @@
         {
           "cell": "C14",
           "label": "Income Tax rate",
-          "hint": "",
+          "hint": "match the constitution you filled at C6: a proprietorship or partnership is taxed at the individual/firm slab rates (effective rate typically 20-30% at these profit levels, not a flat corporate rate); use the actual corporate rate only for a Pvt Ltd / LLP",
           "default": null,
           "type": "percent"
         },
