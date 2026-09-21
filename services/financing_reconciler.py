@@ -401,8 +401,22 @@ _CAPACITY = "Assumptions!C16"
 _UTIL_Y1 = "Assumptions!C18"
 _PRICE = "Assumptions!C23"
 _UNIT_COSTS = ("Assumptions!C25", "Assumptions!C27", "Assumptions!C29")
-_MONTHLY_FIXED = ("Assumptions!C32", "Assumptions!C34", "Assumptions!C36", "Assumptions!C38")
+# Wages (C32) is NOT in this tuple — it is the FORMULA '=D32*E32' now (bug 12; see
+# reconcile_headcount / _HEADCOUNT_CELL / _AVG_COST_CELL below), so it is never a value
+# sitting in `answers` the way these other three still are. _monthly_fixed_total() below
+# adds it back in from D32*E32 directly so it is not silently counted as zero.
+_MONTHLY_FIXED = ("Assumptions!C34", "Assumptions!C36", "Assumptions!C38")
 _SELLING_PCT = "Assumptions!C40"
+
+
+def _monthly_fixed_total(out: dict) -> float:
+    """Sum of every monthly fixed/period cost, wages included — the one place this is
+    computed, so a cell added to _MONTHLY_FIXED later cannot silently miss the wages half
+    the way the plain sum used to before this existed (see the comment on _MONTHLY_FIXED)."""
+    total = sum(_num(out.get(c)) or 0.0 for c in _MONTHLY_FIXED)
+    hc = _num(out.get("Assumptions!D32")) or 0.0
+    avg_cost = _num(out.get("Assumptions!E32")) or 0.0
+    return total + hc * avg_cost
 
 
 # Where reconcile_scale parks the volume it found before raising it, so a later pass can
@@ -457,7 +471,7 @@ def reconcile_scale(answers: dict, project=None) -> dict:
         return out
 
     unit_cost = sum(_num(out.get(c)) or 0.0 for c in _UNIT_COSTS)
-    fixed = 12.0 * sum(_num(out.get(c)) or 0.0 for c in _MONTHLY_FIXED)
+    fixed = 12.0 * _monthly_fixed_total(out)
     sd = _num(out.get(_SELLING_PCT)) or 0.0
 
     units = cap * util
