@@ -1189,6 +1189,13 @@ def reconcile_headcount(answers: dict, project) -> dict:
         out[_AVG_COST_CELL] = _DEFAULT_AVG_COST
         logger.info("headcount: E32 missing/zero; defaulted to Rs %.0f / employee / month",
                     _DEFAULT_AVG_COST)
+    # Projects generated before C32 became a formula still carry a stored
+    # "Assumptions!C32" answer (the AI's old plain-number wage guess). fill_template
+    # writes every key in `answers` straight into its cell, so that stale value was
+    # silently overwriting the template's own '=D32*E32' formula on every regeneration
+    # -- the wages fix never actually took effect for any pre-existing project. Drop it
+    # so the formula stands.
+    out.pop("Assumptions!C32", None)
     return out
 
 
