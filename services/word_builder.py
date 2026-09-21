@@ -641,6 +641,15 @@ def _measure_pages(docx_bytes, headings, captions=()):
                     if probe and probe in texts[i]:
                         page, start = i + 1, i
                         break
+                if page is None and probe:
+                    # A miss here is why the TOC ends up with no page number for this
+                    # entry (bug: Form IV / Form V page numbers went missing with no
+                    # obvious code difference from the other statements that worked) —
+                    # logged so a recurrence can be root-caused against a real render
+                    # instead of guessed at from the code alone.
+                    logger.warning("contents: could not locate a page for %r "
+                                   "(probe %r not found on any body page from index %d)",
+                                   text, probe, start)
                 found.append(page)
             return found
 
@@ -1047,6 +1056,26 @@ def _assumptions_table(doc, rows, numbering):
     doc.add_paragraph()
 
 
+def _fmt_statement_value(label: str, v):
+    """Format one statement-table cell by what its ROW actually is, not just how big the
+    number happens to be. The old magnitude-only guess (₹ if >= 1000, else a raw decimal)
+    is right for money, but it silently mis-renders two other row types that share this
+    one generic table builder: a margin/percentage row stored as a 0-1 fraction (e.g.
+    EBITDA Margin) showed as "0.23" here while the SAME figure showed correctly as "23%"
+    elsewhere in the report (_financial_tables, which already has this "Margin" check);
+    and a unit-count row (e.g. "Rooms sold / covers served (units)") large enough to clear
+    the ₹1,000 threshold got a ₹ symbol and a Cr/L suffix as if it were money.
+    """
+    if not isinstance(v, (int, float)):
+        return "—"
+    low = label.lower()
+    if "margin" in low:
+        return _pct(v)
+    if "(units)" in low or "(unit)" in low:
+        return f"{v:,.0f}"
+    return _inr(v) if abs(v) >= 1000 else f"{v:,.2f}"
+
+
 def _statement_tables(doc, tables, numbering):
     """Every statutory statement the workbook computes, each on its own page."""
     for t in tables or []:
@@ -1057,9 +1086,7 @@ def _statement_tables(doc, tables, numbering):
             if is_heading:
                 body.append(([label, "", "", "", "", ""], True))
             else:
-                body.append(([label] + [_inr(v) if abs(v or 0) >= 1000 else
-                                        (f"{v:,.2f}" if isinstance(v, (int, float)) else "—")
-                                        for v in vals], False))
+                body.append(([label] + [_fmt_statement_value(label, v) for v in vals], False))
         _statement_table(doc, ["Particulars", "Year 1", "Year 2", "Year 3", "Year 4", "Year 5"],
                          body)
         # Every statement is explained beneath it — what it is and what these numbers

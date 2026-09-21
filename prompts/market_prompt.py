@@ -24,6 +24,14 @@ Perform a comprehensive market analysis covering:
 10. Market Opportunities
 11. Market Challenges
 
+Do not invent specific operational figures for a named or implied competitor (an exact
+room count, seat count, unit count, or similarly precise capacity detail) unless that
+figure is explicitly given to you above — this report's own financial model may not track
+that same detail, and a specific-sounding number that does not match it reads as a
+factual error, not local colour. Benchmark on the metrics the business itself is actually
+measured on (e.g. price/rate, growth rate), described qualitatively or as an industry-
+typical range, rather than as an invented example with a specific size attached to it.
+
 Return ONLY valid JSON.
 
 {

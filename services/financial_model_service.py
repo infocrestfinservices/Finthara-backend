@@ -141,6 +141,22 @@ Rules:{f'''
   and can only disagree with the model. Quote a figure in a sentence where it makes the
   point, and nothing more.
 - Numbers you quote are the ones given above. Do not invent others.
+- Every field above that has a real value — PROMOTER, HEADLINE FINANCES (project_cost,
+  own_contribution, loan), or any PURPOSE-SPECIFIC ANSWER — IS provided. Never write that
+  the promoter is "not identified", or that the project cost / contribution / loan sought
+  are "not quantified", "not provided", "recorded as nil" or similar, when the
+  corresponding field above is filled in. That instruction not to reproduce the financial
+  statements means quote figures sparingly in prose — it does NOT mean treat the underlying
+  data as missing. If a field genuinely reads "N/A", it is fine to note that one specific
+  gap — do not generalise it into a claim that covers fields which do have values.
+- Stay internally consistent across every section of the narrative: if one section states
+  a fact (the promoter's name, their experience, a figure, a feature of how the business
+  operates), no other section may imply that same fact is unknown or unavailable.
+- Describe only the pricing, operations and features that the inputs above actually show.
+  A single flat rate/price is a single flat rate — do not embellish it into tiered,
+  dynamic, segmented, seasonal or promotional pricing (or any other mechanism) unless a
+  field above actually represents that structure. Writing a richer-sounding business than
+  the numbers support is not more professional, it is inaccurate.
 - Output must be valid JSON and nothing else."""
 
 

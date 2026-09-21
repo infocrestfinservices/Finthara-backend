@@ -92,13 +92,23 @@ def _growth(a, b):
 
 
 def _find(rows, *patterns):
-    """The first data row whose label matches any pattern."""
-    for label, vals, is_heading in rows:
-        if is_heading:
-            continue
-        low = label.lower()
-        if any(re.search(p, low) for p in patterns):
-            return label, vals
+    """The data row matching the EARLIEST pattern that matches anything.
+
+    Patterns are tried in priority order — each is checked against every row before
+    falling back to the next pattern — rather than merged into one OR and matched against
+    rows in document order. That matters whenever a specific pattern (e.g. "total current
+    liabilities") and a broader one that also matches an unrelated component line above it
+    (e.g. "current liabilities" matching "Other current liabilities / provisions") are
+    both given: document order would return whichever happens to sit first on the sheet,
+    which is not necessarily the row the caller meant. Callers should list the most
+    specific pattern first.
+    """
+    for p in patterns:
+        for label, vals, is_heading in rows:
+            if is_heading:
+                continue
+            if re.search(p, label.lower()):
+                return label, vals
     return None, None
 
 
@@ -109,12 +119,21 @@ def _trend_sentence(label, vals, *, ratio=False):
     if ratio:
         direction = "improves" if b > a else ("declines" if b < a else "holds steady")
         return (f"{label} {direction} from {a:,.2f} in Year 1 to {b:,.2f} by Year 5.")
-    g = _growth(a, b)
-    if g is None:
-        return f"{label} stands at {_fmt(b)} by Year 5."
-    direction = "grows" if g > 0 else ("falls" if g < 0 else "is flat")
-    return (f"{label} {direction} from {_fmt(a)} in Year 1 to {_fmt(b)} in Year 5"
-            f" ({g:+.0f}% over the projection).")
+    # Direction is decided by comparing the values directly, never by a computed
+    # %-change — dividing by a negative or near-zero base flips or explodes the
+    # sign/size of a %-change formula even when the value plainly improved (a loss
+    # narrowing into a profit read as a "fall" of over a thousand percent).
+    direction = "grows" if b > a else ("falls" if b < a else "is flat")
+    # A percentage is only shown when both years are positive — that is the one case
+    # where "+X% over the projection" means what it looks like. Any other base makes
+    # the number either undefined or wildly misleading, so it is left out rather than
+    # shown wrong.
+    pct = ""
+    if a > 0 and b > 0:
+        g = _growth(a, b)
+        if g is not None:
+            pct = f" ({g:+.0f}% over the projection)"
+    return f"{label} {direction} from {_fmt(a)} in Year 1 to {_fmt(b)} in Year 5{pct}."
 
 
 def build_commentary(table: dict) -> list:
@@ -138,10 +157,14 @@ def build_commentary(table: dict) -> list:
         if pat:
             a, b = _first_last(pat)
             if a is not None and a < 0 <= b:
+                # Covered by this sentence alone — the generic trend sentence below would
+                # only repeat the same "improves" story a second time (its %-change figure
+                # is already suppressed for a negative base; see _trend_sentence).
                 add("The unit is loss-making in the first year — normal while capacity "
                     "is still ramping up and the full interest charge is being borne — "
                     "and turns profitable thereafter.")
-            add(_trend_sentence("Profit after tax", pat))
+            else:
+                add(_trend_sentence("Profit after tax", pat))
         add("The improvement is driven by rising capacity utilisation against a largely "
             "fixed overhead base, so each additional unit of sales contributes more to "
             "profit than the last.")
@@ -166,7 +189,7 @@ def build_commentary(table: dict) -> list:
 
     elif key == "Form_IV_CA_CL":
         _, ca = _find(rows, r"total current assets", r"current assets")
-        _, cl = _find(rows, r"current liabilities")
+        _, cl = _find(rows, r"total current liabilities", r"current liabilities")
         add(_trend_sentence("Current assets", ca) if ca else None)
         add(_trend_sentence("Current liabilities", cl) if cl else None)
         add("Current assets rise broadly in line with sales, because inventory and "
