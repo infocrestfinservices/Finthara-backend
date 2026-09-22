@@ -474,6 +474,9 @@ def _enriched_description(project: Project, purpose_key: str, answers: dict) -> 
 _AGENT_CACHE_KEY = "_agent_context"
 
 
+_AGENT_CACHE_FINANCE_KEY = "_agent_context_finance"
+
+
 def _build_agent_context(project: Project, purpose_key: str, answers: dict,
                          refresh: bool = False) -> str:
     """Reuse the existing agents to produce supporting analysis, now purpose-aware.
@@ -481,15 +484,28 @@ def _build_agent_context(project: Project, purpose_key: str, answers: dict,
     The three agents are independent, so we run them concurrently (each call is
     blocking network I/O) to cut total latency from sum-of-three to ~one call.
 
-    They describe the BUSINESS (market, feasibility, SWOT), which does not change between
-    runs — so the combined output is cached in the answers blob and REUSED on a plain
-    regeneration instead of re-calling three LLM agents every time (that was ~60% of a
-    regeneration's API cost for no new information). A refresh (or the very first run,
-    when there is no cache) rebuilds it.
+    MARKET RESEARCH and SWOT genuinely describe the business (industry, country,
+    description) and do not change between runs, so the combined output is cached in the
+    answers blob and reused on a plain regeneration instead of re-calling three LLM agents
+    every time. FEASIBILITY is different: its prompt directly embeds project_cost/
+    own_contribution/loan_amount ("the only money it is given"), so its output is stale
+    the moment those change -- confirmed live: a project whose promoter capital went from
+    0 to a real figure kept a cached feasibility paragraph reading "own contribution
+    stated at Nil" alongside the fresh narrative's correct number, one document telling
+    two different funding stories. The whole cached blob is therefore invalidated (not
+    just feasibility, since it is stored as one string) whenever the headline finance a
+    caller now has differs from what the cache was built against.
     """
     from concurrent.futures import ThreadPoolExecutor
 
     cached = answers.get(_AGENT_CACHE_KEY) if isinstance(answers, dict) else None
+    cached_finance = answers.get(_AGENT_CACHE_FINANCE_KEY) if isinstance(answers, dict) else None
+    current_finance = list(_headline_finance(project, answers)) if isinstance(answers, dict) else None
+    if cached and cached_finance is not None and current_finance != cached_finance:
+        logger.info("generate: project=%s headline finance changed (%s -> %s); "
+                    "cached business analysis invalidated", getattr(project, "id", "?"),
+                    cached_finance, current_finance)
+        refresh = True
     if cached and not refresh:
         logger.info("generate: project=%s reusing cached business analysis (0 agent calls)",
                     getattr(project, "id", "?"))
@@ -531,6 +547,7 @@ def _build_agent_context(project: Project, purpose_key: str, answers: dict,
     # store a genuinely-built context, never a run where all three agents failed.
     if isinstance(answers, dict) and "(unavailable" not in ctx[:60]:
         answers[_AGENT_CACHE_KEY] = ctx
+        answers[_AGENT_CACHE_FINANCE_KEY] = list((pc, oc, loan))
     return ctx
 
 

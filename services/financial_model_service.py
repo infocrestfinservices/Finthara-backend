@@ -169,6 +169,16 @@ Rules:{f'''
   in the accompanying Excel model" instead, every time coverage or return comes up. This
   holds even if a WORKBOOK'S OWN VERDICT is given above: use its words (its tier and
   reasoning), never a number of your own.
+- The same applies to multi-year REVENUE: you have not been given the workbook's own
+  Net Sales figures (they depend on the capacity/price/escalation build-up computed
+  inside the sheet, not shown here), so do not independently project or state a specific
+  Year 1-Year 5 revenue figure or range — a report that quoted "1.36 Cr to 2.1 Cr" while
+  the workbook's own Net Sales row read something else entirely, in the same document,
+  is exactly the failure this rule exists to stop. Describe the revenue TRAJECTORY
+  qualitatively instead (e.g. "revenue is projected to grow steadily as capacity
+  utilisation ramps up over the five years") unless a specific figure is explicitly given
+  to you above (PURPOSE-SPECIFIC ANSWERS or VERIFIED HEADLINE FIGURES), in which case use
+  that exact number and no other.
 - Every field above that has a real value — PROMOTER, HEADLINE FINANCES (project_cost,
   own_contribution, loan), or any PURPOSE-SPECIFIC ANSWER — IS provided. Never write that
   the promoter is "not identified", or that the project cost / contribution / loan sought
