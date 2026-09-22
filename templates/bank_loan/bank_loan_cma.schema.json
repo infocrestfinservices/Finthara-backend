@@ -663,6 +663,13 @@
           "default": 0,
           "label": "Existing loan — remaining tenure (MONTHS)",
           "hint": "Months still to run, e.g. 48. Not years."
+        },
+        {
+          "cell": "C79",
+          "type": "number",
+          "default": null,
+          "label": "Pre-operative & preliminary expenses",
+          "hint": "One-time costs incurred before the business opens: registration, licences, architect/consultant fees, interest during construction, trial-run costs, etc. Rupees, not a percentage. This feeds the Cost of Project total (Assumptions!C81), which must tie to the term loan + promoter capital below it -- if the client gave no figure, estimate a realistic one for a project of this size and industry rather than leaving it at 0, since 0 here silently understates the true project cost against the funding being sought."
         }
       ]
     }
