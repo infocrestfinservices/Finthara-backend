@@ -80,6 +80,38 @@ def _fmt_inr(v) -> str:
     return f"₹{v:,.0f}"
 
 
+def verdict_tier(kpis: dict) -> tuple[str, str] | None:
+    """The same tier + one-line reason the workbook's own Conclusion!D25 formula
+    computes, from the same kpis dict (see _real_kpis_from_recalc) -- the ONE place
+    this is decided, so the Excel verdict, the Word conclusion paragraph and the
+    narrative-writing prompt can never independently reach three different answers
+    (5-report audit bug B: the narrative twice quoted a DSCR the workbook did not show,
+    and called a REVIEW-REQUIRED report "financially viable"). Returns None if there
+    isn't enough data to judge (no DSCR available)."""
+    if not isinstance(kpis, dict):
+        return None
+    if kpis.get("scale_flag"):
+        return ("REVIEW REQUIRED",
+                "the revenue/cost scale, EBITDA margin or DSCR falls outside the normal "
+                "range for a proposal this size and needs manual verification")
+    avg_dscr = kpis.get("avg_dscr")
+    if avg_dscr is None:
+        return None
+    try:
+        d = float(avg_dscr)
+        m = float(kpis.get("min_dscr")) if kpis.get("min_dscr") is not None else d
+    except (TypeError, ValueError):
+        return None
+    if d >= 1.5 and m >= 1.25:
+        return ("STRONG", f"average DSCR {d:.2f} and minimum-year DSCR {m:.2f} both clear "
+                          f"the bank's comfort threshold")
+    if d >= 1.2 and m >= 1.0:
+        return ("BANKABLE", f"average DSCR {d:.2f} meets the 1.20 minimum with no year "
+                            f"below 1.00 (weakest year {m:.2f})")
+    return ("BELOW NORM", f"average DSCR {d:.2f} or the weakest year ({m:.2f}) falls "
+                          f"short of the bank's floor")
+
+
 def _conclusion_text(project, kpis: dict) -> str:
     """A professional, data-grounded conclusion paragraph built from the model's own
     figures. kpis: optional {'revenue_y1','revenue_y5','pat_y5','avg_dscr','min_dscr',
@@ -104,10 +136,11 @@ def _conclusion_text(project, kpis: dict) -> str:
         except (TypeError, ValueError):
             pass
 
-    # Same test the workbook's own Conclusion!D25 verdict formula runs, on the same
-    # recalculated figures — so this paragraph and the sheet can never disagree, unlike
-    # before when this text had no working access to the real numbers at all (see
+    # verdict_tier runs the SAME test the workbook's own Conclusion!D25 formula runs, on
+    # the same recalculated figures — so this paragraph and the sheet can never disagree,
+    # unlike before when this text had no working access to the real numbers at all (see
     # _real_kpis_from_recalc) and the sheet was the only place a verdict was computed.
+    tier = verdict_tier(kpis)
     scale_flag = kpis.get("scale_flag")
     avg_dscr, min_dscr = kpis.get("avg_dscr"), kpis.get("min_dscr")
     if scale_flag:
@@ -116,15 +149,15 @@ def _conclusion_text(project, kpis: dict) -> str:
             "range for a proposal of this size and warrant manual verification before "
             "these numbers are relied on — REVIEW REQUIRED."
         )
-    elif avg_dscr is not None:
+    elif tier and avg_dscr is not None:
         try:
             d = float(avg_dscr)
             m = float(min_dscr) if min_dscr is not None else d
-            if d >= 1.5 and m >= 1.25:
+            if tier[0] == "STRONG":
                 verdict = (f"comfortably serviceable — the average DSCR ({d:.2f}) is well "
                            f"above the 1.20 benchmark and the weakest year ({m:.2f}) still "
                            f"clears 1.25")
-            elif d >= 1.2 and m >= 1.0:
+            elif tier[0] == "BANKABLE":
                 verdict = (f"serviceable — the average DSCR ({d:.2f}) meets the 1.20 minimum "
                            f"and no year falls below 1.00 (weakest year {m:.2f})")
             else:

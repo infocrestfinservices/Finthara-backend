@@ -240,8 +240,43 @@ def _resolve_template(purpose_key: str, answers: dict, industry: str = None,
     return purpose_key, default_template(purpose_key)
 
 
+def _headline_finance(project: Project, answers: dict) -> tuple[float, float, float]:
+    """(project_cost, own_contribution, loan_amount), preferring the PROJECT's own
+    fields but falling back to the actual CMA input cells / questionnaire answers when
+    those are blank.
+
+    For a bank_loan/CMA project these top-level Project columns are routinely never
+    set at all -- the real figures live only in Assumptions!C8 (term loan) and C9
+    (promoter capital), filled in later by the AI or a prior generation. Every caller
+    that read project.loan_amount etc. directly therefore saw None/0 for a project
+    that plainly states a Rs 7.5 Cr loan and Rs 3.11 Cr promoter capital on its own
+    Cover and Conclusion sheets (5-report audit bug C) -- the feasibility agent then
+    honestly reported "recorded as nil", and the main narrative's HEADLINE FINANCES
+    line did the same. No project cost cell exists on its own; the workbook's own
+    Conclusion sheet uses loan + promoter capital as that total, so this does too.
+    """
+    a = answers or {}
+
+    def _num(v):
+        try:
+            f = float(v)
+            return f if f else None
+        except (TypeError, ValueError):
+            return None
+
+    loan = _num(getattr(project, "loan_amount", None)) or _num(a.get("Assumptions!C8")) \
+        or _num(a.get("loan_amount"))
+    contribution = _num(getattr(project, "own_contribution", None)) \
+        or _num(a.get("Assumptions!C9")) or _num(a.get("own_contribution"))
+    cost = _num(getattr(project, "project_cost", None)) or _num(a.get("project_cost"))
+    if cost is None and (loan or contribution):
+        cost = (loan or 0) + (contribution or 0)
+    return cost or 0, contribution or 0, loan or 0
+
+
 def _project_dict(project: Project, answers: dict) -> dict:
     d = {f: getattr(project, f, None) for f in _PROJECT_FIELDS}
+    d["project_cost"], d["own_contribution"], d["loan_amount"] = _headline_finance(project, answers)
     # purpose_answers is json.dumps'd into BOTH the narrative and the input-fill prompts as
     # the model's "numeric inputs" block. Internal bookkeeping keys — above all the ~35 KB
     # cached _agent_context — are NOT model inputs. Dumping them ballooned the narrative
@@ -464,9 +499,7 @@ def _build_agent_context(project: Project, purpose_key: str, answers: dict,
     industry = project.industry or "General"
     country = project.country or "India"
     desc = _enriched_description(project, purpose_key, answers)
-    pc = project.project_cost or 0
-    oc = project.own_contribution or 0
-    loan = project.loan_amount or 0
+    pc, oc, loan = _headline_finance(project, answers)
     label = get_config(purpose_key)["label"]
 
     def _safe(title, fn):
@@ -1031,6 +1064,7 @@ def _run_generation(db: Session, project: Project, req: GenerateRequest, prog=No
     statement_tables = None
     key_assumptions = None
     recalc = None
+    real_kpis = None
     # Only AI-fill a template when its sample workbook still exists on disk. If the
     # samples were removed, skip the template track entirely and let the
     # deterministic formula-driven model (build_model_excel) be the output.
@@ -1125,6 +1159,7 @@ def _run_generation(db: Session, project: Project, req: GenerateRequest, prog=No
                 try:
                     from services.report_annex_service import _real_kpis_from_recalc
                     _rk = _real_kpis_from_recalc(recalc)
+                    real_kpis = _rk or None
                     if _rk:
                         consistency = (consistency or []) + [{
                             "name": "Scale / DSCR sanity (revenue vs. cost, EBITDA margin, DSCR)",
@@ -1174,6 +1209,23 @@ def _run_generation(db: Session, project: Project, req: GenerateRequest, prog=No
             "do NOT invent different ones. For DSCR, IRR, NPV and detailed year-by-year "
             "ratios, refer the reader to the accompanying Excel model rather than quoting "
             "a specific figure):\n" + verified)
+    # The workbook's own bankability verdict (same Conclusion!D25 test, same recalculated
+    # figures) -- told to the narrative explicitly, because the "don't quote DSCR" line
+    # above was not enough on its own: the 5-report audit found the narrative twice
+    # quoting a DSCR the workbook did not show, and calling a REVIEW-REQUIRED report
+    # "financially viable" with no mention of the caution the sheet itself carries.
+    if real_kpis:
+        from services.report_annex_service import verdict_tier
+        tier = verdict_tier(real_kpis)
+        if tier:
+            agent_context += (
+                f"\n\nWORKBOOK'S OWN VERDICT — {tier[0]} ({tier[1]}). Your narrative's tone "
+                f"must match this exactly. Never state a specific DSCR number anywhere in "
+                f"the narrative -- say 'refer to the DSCR schedule in the Excel model' "
+                f"instead. If the verdict is REVIEW REQUIRED or BELOW NORM, do not call the "
+                f"project 'financially viable', 'comfortably serviceable' or similar -- say "
+                f"plainly that the figures need verification / coverage falls short, "
+                f"consistent with the verdict above.")
 
     sample_blueprint = build_blueprint_text(purpose_key) or ""
     # The user's requirements are passed as their OWN prompt block, not folded into
