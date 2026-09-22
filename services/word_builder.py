@@ -638,18 +638,24 @@ def _measure_pages(docx_bytes, headings, captions=()):
                 for i in range(start, len(texts)):
                     if i in front:
                         continue
-                    if probe and probe in texts[i]:
+                    body = texts[i]
+                    # A heading that lands right at a page break is split across the two
+                    # rendered pages, so the WHOLE probe never sits inside either page's
+                    # text alone and the entry silently lost its page number (root-caused
+                    # from a real render after this happened to "Form IV"/"Form V", then
+                    # recurred on "Ratios"/"DSCR" — always whichever heading happened to
+                    # fall on a boundary in that particular report, never the same one
+                    # twice). Joining this page with the next one catches a heading that
+                    # starts here and continues there; it still STARTS on page i, so that
+                    # is the page number kept.
+                    nxt = texts[i + 1] if i + 1 < len(texts) and (i + 1) not in front else ""
+                    if probe and (probe in body or probe in (body + nxt)):
                         page, start = i + 1, i
                         break
                 if page is None and probe:
-                    # A miss here is why the TOC ends up with no page number for this
-                    # entry (bug: Form IV / Form V page numbers went missing with no
-                    # obvious code difference from the other statements that worked) —
-                    # logged so a recurrence can be root-caused against a real render
-                    # instead of guessed at from the code alone.
                     logger.warning("contents: could not locate a page for %r "
-                                   "(probe %r not found on any body page from index %d)",
-                                   text, probe, start)
+                                   "(probe %r not found on any body page, or its page-break "
+                                   "join, from index %d)", text, probe, start)
                 found.append(page)
             return found
 

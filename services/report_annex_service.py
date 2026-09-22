@@ -82,7 +82,8 @@ def _fmt_inr(v) -> str:
 
 def _conclusion_text(project, kpis: dict) -> str:
     """A professional, data-grounded conclusion paragraph built from the model's own
-    figures. kpis: optional {'revenue_y1','revenue_y5','pat_y5','avg_dscr','irr',...}."""
+    figures. kpis: optional {'revenue_y1','revenue_y5','pat_y5','avg_dscr','min_dscr',
+    'scale_flag',...} — see _real_kpis_from_recalc, the normal source for these."""
     name = getattr(project, "title", None) or "The project"
     industry = getattr(project, "industry", None) or "the sector"
     parts = []
@@ -103,20 +104,34 @@ def _conclusion_text(project, kpis: dict) -> str:
         except (TypeError, ValueError):
             pass
 
-    dscr = kpis.get("avg_dscr")
-    if dscr is not None:
+    # Same test the workbook's own Conclusion!D25 verdict formula runs, on the same
+    # recalculated figures — so this paragraph and the sheet can never disagree, unlike
+    # before when this text had no working access to the real numbers at all (see
+    # _real_kpis_from_recalc) and the sheet was the only place a verdict was computed.
+    scale_flag = kpis.get("scale_flag")
+    avg_dscr, min_dscr = kpis.get("avg_dscr"), kpis.get("min_dscr")
+    if scale_flag:
+        parts.append(
+            "The projected revenue, margin or coverage figures fall outside the normal "
+            "range for a proposal of this size and warrant manual verification before "
+            "these numbers are relied on — REVIEW REQUIRED."
+        )
+    elif avg_dscr is not None:
         try:
-            d = float(dscr)
-            if d >= 1.5:
-                verdict = ("comfortably serviceable, with the average DSCR well above the "
-                           "1.20 benchmark banks look for")
-            elif d >= 1.2:
-                verdict = ("serviceable, with the average DSCR meeting the 1.20 minimum "
-                           "banks look for")
+            d = float(avg_dscr)
+            m = float(min_dscr) if min_dscr is not None else d
+            if d >= 1.5 and m >= 1.25:
+                verdict = (f"comfortably serviceable — the average DSCR ({d:.2f}) is well "
+                           f"above the 1.20 benchmark and the weakest year ({m:.2f}) still "
+                           f"clears 1.25")
+            elif d >= 1.2 and m >= 1.0:
+                verdict = (f"serviceable — the average DSCR ({d:.2f}) meets the 1.20 minimum "
+                           f"and no year falls below 1.00 (weakest year {m:.2f})")
             else:
-                verdict = ("below the 1.20 DSCR benchmark banks look for, indicating the "
-                           "debt structure or margins should be revisited before sanction")
-            parts.append(f"The debt is {verdict} (average DSCR {d:.2f}).")
+                verdict = (f"below the benchmark banks look for (average DSCR {d:.2f}, "
+                           f"weakest year {m:.2f}), indicating the debt structure or margins "
+                           f"should be revisited before sanction")
+            parts.append(f"The debt is {verdict}.")
         except (TypeError, ValueError):
             pass
 
@@ -137,12 +152,76 @@ def _conclusion_text(project, kpis: dict) -> str:
         except (TypeError, ValueError):
             pass
 
-    parts.append(
-        "On the strength of the projected financials, ratios and coverage set out above, "
-        "the proposal is considered financially viable, subject to the assumptions holding "
-        "and the usual terms of sanction."
-    )
+    if scale_flag:
+        parts.append(
+            "On this basis the proposal cannot yet be confirmed as viable: the figures "
+            "above should be checked against the promoter's actual capacity, pricing and "
+            "cost inputs before this report is relied upon for a sanction decision."
+        )
+    else:
+        parts.append(
+            "On the strength of the projected financials, ratios and coverage set out above, "
+            "the proposal is considered financially viable, subject to the assumptions holding "
+            "and the usual terms of sanction."
+        )
     return "  ".join(parts)
+
+
+def _real_kpis_from_recalc(recalc_bytes: bytes) -> dict:
+    """The same figures, read from the same cells, that the workbook's own
+    Conclusion!D25 verdict formula uses — so the Word conclusion and the Excel verdict
+    are always computed from one source. Returns {} if recalc_bytes is unavailable or
+    the expected sheets/cells are not present (never raises)."""
+    if not recalc_bytes:
+        return {}
+    try:
+        from openpyxl import load_workbook
+        from io import BytesIO
+        wb = load_workbook(BytesIO(recalc_bytes), data_only=True)
+        if "DSCR" not in wb.sheetnames or "Annual_Summary" not in wb.sheetnames:
+            return {}
+        dscr_row = [wb["DSCR"][f"{c}14"].value for c in "CDEFG"]
+        dscr_row = [float(v) for v in dscr_row if isinstance(v, (int, float))]
+        if not dscr_row:
+            return {}
+        avg_dscr = sum(dscr_row) / len(dscr_row)
+        min_dscr = min(dscr_row)
+
+        annual = wb["Annual_Summary"]
+        sales = [annual[f"{c}8"].value for c in "CDEFG"]
+        ebitda = [annual[f"{c}22"].value for c in "CDEFG"]
+        pat = [annual[f"{c}26"].value for c in "CDEFG"]
+        rev1 = sales[0] if isinstance(sales[0], (int, float)) else None
+        rev5 = sales[4] if isinstance(sales[4], (int, float)) else None
+        pat5 = pat[4] if isinstance(pat[4], (int, float)) else None
+
+        margins = [e / s for e, s in zip(ebitda, sales)
+                   if isinstance(e, (int, float)) and isinstance(s, (int, float)) and s]
+        max_margin = max(margins) if margins else None
+
+        proj_cost = None
+        if "Assumptions" in wb.sheetnames:
+            loan = wb["Assumptions"]["C8"].value
+            equity = wb["Assumptions"]["C9"].value
+            if isinstance(loan, (int, float)) and isinstance(equity, (int, float)):
+                proj_cost = loan + equity
+        ratio = (rev1 / proj_cost) if (rev1 and proj_cost) else None
+
+        # Same three flags as Conclusion!D25 (bug 1 from the 5-report audit: a scale/unit
+        # mismatch inflates sales while DSCR/margin quietly go non-sensical) — checked
+        # here too so the Word narrative never asserts "STRONG"/"viable" over figures the
+        # workbook itself would mark REVIEW REQUIRED.
+        scale_flag = bool(
+            (max_margin is not None and max_margin > 0.4)
+            or (ratio is not None and (ratio < 0.3 or ratio > 8))
+            or (avg_dscr > 10)
+        )
+        return {"revenue_y1": rev1, "revenue_y5": rev5, "pat_y5": pat5,
+                "avg_dscr": avg_dscr, "min_dscr": min_dscr, "scale_flag": scale_flag}
+    except Exception:
+        logger.warning("annex: could not read real KPIs from the recalculated workbook",
+                       exc_info=True)
+        return {}
 
 
 def _kpis_from_model(model: dict) -> dict:
@@ -170,11 +249,19 @@ def _kpis_from_model(model: dict) -> dict:
 
 
 def build_annex_cell_answers(project, purpose_label: str = "", model: dict = None,
-                             swot_markdown: str = None) -> dict:
+                             swot_markdown: str = None, recalc_bytes: bytes = None) -> dict:
     """Return {"SWOT!B6": ..., ..., "Conclusion!B28": ...} for the workbook annex.
 
     swot_markdown: pass the swot_agent output if already computed; else it is
-    generated here. Failures are non-fatal — a missing quadrant just stays blank."""
+    generated here. Failures are non-fatal — a missing quadrant just stays blank.
+
+    recalc_bytes: the server-recalculated workbook, when available. The narrative
+    `model` dict has not carried real financial figures since the "sheets" array was
+    dropped from the LLM prompt (see financial_model_service.py) — so without this the
+    conclusion's DSCR/revenue sentences silently never fired, on every report, for
+    however long that has been true. Reading the real numbers back out of the same
+    recalculated workbook the Excel verdict formula reads is also what lets this
+    paragraph and Conclusion!D25 agree instead of being two independent guesses."""
     answers = {}
 
     # SWOT
@@ -198,7 +285,8 @@ def build_annex_cell_answers(project, purpose_label: str = "", model: dict = Non
 
     # Conclusion
     try:
-        answers[CONCLUSION_CELL] = _conclusion_text(project, _kpis_from_model(model or {}))
+        kpis = _real_kpis_from_recalc(recalc_bytes) or _kpis_from_model(model or {})
+        answers[CONCLUSION_CELL] = _conclusion_text(project, kpis)
     except Exception:
         logger.warning("annex: conclusion build failed", exc_info=True)
 

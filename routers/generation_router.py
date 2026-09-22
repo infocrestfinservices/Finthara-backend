@@ -1030,6 +1030,7 @@ def _run_generation(db: Session, project: Project, req: GenerateRequest, prog=No
     market_segments = None
     statement_tables = None
     key_assumptions = None
+    recalc = None
     # Only AI-fill a template when its sample workbook still exists on disk. If the
     # samples were removed, skip the template track entirely and let the
     # deterministic formula-driven model (build_model_excel) be the output.
@@ -1114,6 +1115,32 @@ def _run_generation(db: Session, project: Project, req: GenerateRequest, prog=No
                 if kpis:
                     derived_kpis = kpis
                 consistency = run_checks(recalc, analysis)
+                # Same scale/DSCR sanity test as the workbook's own Conclusion!D25 verdict
+                # (5-report audit bug 1: a capacity UNIT mismatch — e.g. "units" filled in
+                # for a tonnes/year figure — inflated sales 19x on the steel report and
+                # produced a 138x-217x DSCR that nothing caught before delivery). Surfaced
+                # here too, in the API's own consistency_checks list, not only inside the
+                # workbook, so an out-of-range report is visibly flagged rather than only
+                # discoverable by opening the Excel to the Conclusion sheet.
+                try:
+                    from services.report_annex_service import _real_kpis_from_recalc
+                    _rk = _real_kpis_from_recalc(recalc)
+                    if _rk:
+                        consistency = (consistency or []) + [{
+                            "name": "Scale / DSCR sanity (revenue vs. cost, EBITDA margin, DSCR)",
+                            "sheet": "Conclusion", "cell": "D25",
+                            "value": ("flagged" if _rk.get("scale_flag") else "normal"),
+                            "ok": not _rk.get("scale_flag"), "tolerance": None,
+                        }]
+                        if _rk.get("scale_flag"):
+                            logger.warning(
+                                "generate: project=%s SCALE SANITY FAILED — avg_dscr=%.2f "
+                                "min_dscr=%.2f revenue_y1=%s pat_y5=%s; review before this "
+                                "report is delivered", project.id, _rk.get("avg_dscr") or -1,
+                                _rk.get("min_dscr") or -1, _rk.get("revenue_y1"),
+                                _rk.get("pat_y5"))
+                except Exception:
+                    logger.warning("generate: scale-sanity check failed", exc_info=True)
                 from services.financial_summary_service import (extract_financial_summary,
                                                                 extract_market_segments,
                                                                 extract_statement_tables,
@@ -1203,7 +1230,8 @@ def _run_generation(db: Session, project: Project, req: GenerateRequest, prog=No
             model["market_research"] = market
         if feasibility:
             model["feasibility_analysis"] = feasibility
-        annex = build_annex_cell_answers(project, get_config(purpose_key)["label"], model, swot_md)
+        annex = build_annex_cell_answers(project, get_config(purpose_key)["label"], model, swot_md,
+                                         recalc_bytes=recalc)
         if annex:
             answers.update(annex)
             _persist_answers(db, project, answers)

@@ -515,7 +515,7 @@
           "type": "number",
           "default": null,
           "label": "Value-added services — annual volume / units (Year 1)",
-          "hint": "How many units of this stream are sold in Year 1. 0 only if the business genuinely has no such income."
+          "hint": "Leave this at 0 unless the client explicitly mentioned this income (with a figure) in their own brief or answers. Do not invent a plausible-sounding ancillary revenue stream that was never given -- if the client said this income is nil, or never mentioned it at all, it MUST stay 0, not get a default/typical volume."
         },
         {
           "cell": "D66",
@@ -529,7 +529,7 @@
           "type": "number",
           "default": null,
           "label": "Installation / Assembly — annual volume / units (Year 1)",
-          "hint": "How many units of this stream are sold in Year 1. 0 only if the business genuinely has no such income."
+          "hint": "Leave this at 0 unless the client explicitly mentioned this income (with a figure) in their own brief or answers. Do not invent a plausible-sounding ancillary revenue stream that was never given -- if the client said this income is nil, or never mentioned it at all, it MUST stay 0, not get a default/typical volume."
         },
         {
           "cell": "D67",
@@ -543,7 +543,7 @@
           "type": "number",
           "default": null,
           "label": "Extended warranty / AMC — annual volume / units (Year 1)",
-          "hint": "How many units of this stream are sold in Year 1. 0 only if the business genuinely has no such income."
+          "hint": "Leave this at 0 unless the client explicitly mentioned this income (with a figure) in their own brief or answers. Do not invent a plausible-sounding ancillary revenue stream that was never given -- if the client said this income is nil, or never mentioned it at all, it MUST stay 0, not get a default/typical volume."
         },
         {
           "cell": "D68",
@@ -557,7 +557,7 @@
           "type": "number",
           "default": null,
           "label": "Other revenue — annual volume / units (Year 1)",
-          "hint": "How many units of this stream are sold in Year 1. 0 only if the business genuinely has no such income."
+          "hint": "Leave this at 0 unless the client explicitly mentioned this income (with a figure) in their own brief or answers. Do not invent a plausible-sounding ancillary revenue stream that was never given -- if the client said this income is nil, or never mentioned it at all, it MUST stay 0, not get a default/typical volume."
         },
         {
           "cell": "D69",

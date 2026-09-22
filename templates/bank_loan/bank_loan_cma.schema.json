@@ -107,7 +107,7 @@
         {
           "cell": "C16",
           "label": "Installed Capacity",
-          "hint": "",
+          "hint": "use the SAME unit the client's own brief states (tonnes, kg, litres, pieces, sq.ft, etc.) and the SAME number -- never convert it into a generic count of 'units'. A wrong unit here (e.g. reporting a tonnes/year capacity as a units/year count) inflates every downstream sales figure and makes DSCR meaningless.",
           "default": null,
           "type": "number"
         },
@@ -529,7 +529,7 @@
           "type": "number",
           "default": null,
           "label": "By-product / scrap sales — annual volume / units (Year 1)",
-          "hint": "How many units of this ancillary output are sold in Year 1. 0 only if the unit genuinely has none."
+          "hint": "Leave this at 0 unless the client explicitly mentioned this income (with a figure) in their own brief or answers. Do not invent a plausible-sounding ancillary revenue stream that was never given -- if the client said this income is nil, or never mentioned it at all, it MUST stay 0, not get a default/typical volume."
         },
         {
           "cell": "D66",
@@ -557,7 +557,7 @@
           "type": "number",
           "default": null,
           "label": "Job work / contract manufacturing — annual volume / units (Year 1)",
-          "hint": "How many units of this ancillary output are sold in Year 1. 0 only if the unit genuinely has none."
+          "hint": "Leave this at 0 unless the client explicitly mentioned this income (with a figure) in their own brief or answers. Do not invent a plausible-sounding ancillary revenue stream that was never given -- if the client said this income is nil, or never mentioned it at all, it MUST stay 0, not get a default/typical volume."
         },
         {
           "cell": "D67",
@@ -585,7 +585,7 @@
           "type": "number",
           "default": null,
           "label": "Trading of bought-out items — annual volume / units (Year 1)",
-          "hint": "How many units of this ancillary output are sold in Year 1. 0 only if the unit genuinely has none."
+          "hint": "Leave this at 0 unless the client explicitly mentioned this income (with a figure) in their own brief or answers. Do not invent a plausible-sounding ancillary revenue stream that was never given -- if the client said this income is nil, or never mentioned it at all, it MUST stay 0, not get a default/typical volume."
         },
         {
           "cell": "D68",
@@ -613,7 +613,7 @@
           "type": "number",
           "default": null,
           "label": "Other operating income — annual volume / units (Year 1)",
-          "hint": "How many units of this ancillary output are sold in Year 1. 0 only if the unit genuinely has none."
+          "hint": "Leave this at 0 unless the client explicitly mentioned this income (with a figure) in their own brief or answers. Do not invent a plausible-sounding ancillary revenue stream that was never given -- if the client said this income is nil, or never mentioned it at all, it MUST stay 0, not get a default/typical volume."
         },
         {
           "cell": "D69",

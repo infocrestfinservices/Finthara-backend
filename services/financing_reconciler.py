@@ -703,6 +703,32 @@ for _grp_start in range(0, len(_STREAM_LABEL_CELLS), 4):
         _STREAM_LABEL_INDEX[_STREAM_LABEL_CELLS[_grp_start + _i][0]] = _i
 
 
+_NO_ANCILLARY_PHRASES = (
+    "no additional revenue", "no other revenue", "no ancillary", "no extra revenue",
+    "single revenue stream", "only revenue stream", "no by-product", "no byproduct",
+    "no scrap", "no job work", "no trading income", "streams: nil", "streams : nil",
+    "revenue streams nil", "no additional income", "nil additional revenue",
+    "no secondary revenue", "no other income", "does not have any other",
+    "no other source of revenue",
+)
+
+
+def _explicit_no_ancillary(answers: dict, project) -> bool:
+    """True if the client's own words rule out ancillary income outright.
+
+    reconcile_streams below exists to stop a report shipping an accidentally-empty
+    streams block, but it cannot tell "the AI forgot to fill this" apart from "the
+    client said there is none" — both look like a blank cell. A client who explicitly
+    says so (5-report audit bug 3: reported repeatedly, on reports where the block was
+    then seeded anyway) must be believed, so this is checked BEFORE any seeding."""
+    parts = [str(getattr(project, "project_description", "") or "")]
+    if isinstance(answers, dict):
+        parts.extend(str(v) for k, v in answers.items()
+                     if isinstance(v, str) and "!" not in k)
+    text = " ".join(parts).lower()
+    return any(p in text for p in _NO_ANCILLARY_PHRASES)
+
+
 def reconcile_streams(answers: dict, project) -> dict:
     """Make the "Additional revenue streams" block real for every industry.
 
@@ -732,6 +758,10 @@ def reconcile_streams(answers: dict, project) -> dict:
     if not isinstance(answers, dict):
         return answers
     out = dict(answers)
+    if _explicit_no_ancillary(out, project):
+        logger.info("streams: client's own text rules out ancillary income; "
+                    "seeding skipped, block left as filled (or blank)")
+        return out
     try:
         from financial_engine.industry_calc.operating_models import get_operating_model
         m = get_operating_model(getattr(project, "industry", "") or "")
