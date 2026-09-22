@@ -161,6 +161,14 @@ Rules:{f'''
   and can only disagree with the model. Quote a figure in a sentence where it makes the
   point, and nothing more.
 - Numbers you quote are the ones given above. Do not invent others.
+- You do NOT have an accurate DSCR, IRR or NPV. These require the full multi-year cash-flow
+  and repayment-schedule model, which you have not been shown — the loan amount, interest
+  rate and tenure above are not enough to compute them correctly, even approximately.
+  NEVER state, estimate or imply a specific DSCR/IRR/NPV number anywhere in the narrative,
+  including phrases like "about 1.75" or "roughly 2x" — write "refer to the DSCR schedule
+  in the accompanying Excel model" instead, every time coverage or return comes up. This
+  holds even if a WORKBOOK'S OWN VERDICT is given above: use its words (its tier and
+  reasoning), never a number of your own.
 - Every field above that has a real value — PROMOTER, HEADLINE FINANCES (project_cost,
   own_contribution, loan), or any PURPOSE-SPECIFIC ANSWER — IS provided. Never write that
   the promoter is "not identified", or that the project cost / contribution / loan sought
