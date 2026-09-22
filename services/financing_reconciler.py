@@ -1221,7 +1221,28 @@ def reconcile_gestation(answers: dict, project) -> dict:
 # transport/other before hotel_cma was added here).
 _HEADCOUNT_CELLS_BY_TEMPLATE = {
     "bank_loan_cma": ("Assumptions!D32", "Assumptions!E32"),
+    # All 10 industry templates share the same E32/F32 layout (D32 holds a "Rs/month"
+    # unit label there, unlike the universal template's D32/E32) -- propagated together
+    # once the mechanism was confirmed working on hotel_cma.
     "cma_tourism_hospitality_room_nights_sold_average_room_tariff_arr_e868033b":
+        ("Assumptions!E32", "Assumptions!F32"),
+    "cma_education_training_students_enrolled_fee_per_student_year_8e48886e":
+        ("Assumptions!E32", "Assumptions!F32"),
+    "cma_healthcare_pharma_patients_treated_opd_ipd_average_treatment_charge_481d67de":
+        ("Assumptions!E32", "Assumptions!F32"),
+    "cma_media_entertainment_units_sold_subscribers_average_revenue_per_unit_6d011c2e":
+        ("Assumptions!E32", "Assumptions!F32"),
+    "cma_general_business_units_of_activity_average_price_unit_e0477228":
+        ("Assumptions!E32", "Assumptions!F32"),
+    "cma_food_beverage_restaurant_covers_served_average_order_value_898c85e2":
+        ("Assumptions!E32", "Assumptions!F32"),
+    "cma_retail_e_commerce_transactions_customers_average_bill_value_63b8b86d":
+        ("Assumptions!E32", "Assumptions!F32"),
+    "cma_technology_software_active_subscribers_arpu_per_subscriber_year_be430db8":
+        ("Assumptions!E32", "Assumptions!F32"),
+    "cma_import_export_trading_units_traded_realisation_unit_180f135c":
+        ("Assumptions!E32", "Assumptions!F32"),
+    "cma_transportation_logistics_trips_consignments_revenue_per_trip_57dbce1b":
         ("Assumptions!E32", "Assumptions!F32"),
 }
 # Generic fallback when the AI leaves both blank — a small unit's typical staffing.

@@ -252,27 +252,6 @@
           "type": "percent"
         },
         {
-          "cell": "C26",
-          "label": "(cost of sales is margin-based, not per-unit)",
-          "hint": "",
-          "default": null,
-          "type": "percent"
-        },
-        {
-          "cell": "C27",
-          "label": "(not used in this industry)",
-          "hint": "",
-          "default": null,
-          "type": "number"
-        },
-        {
-          "cell": "C28",
-          "label": "annual power cost escalation",
-          "hint": "",
-          "default": null,
-          "type": "percent"
-        },
-        {
           "cell": "C29",
           "label": "Other cost per unit of activity (packaging / fulfilment)",
           "hint": "",
@@ -287,9 +266,16 @@
           "type": "percent"
         },
         {
-          "cell": "C32",
-          "label": "Direct wages & salaries / month (Year 1)",
-          "hint": "",
+          "cell": "E32",
+          "label": "Headcount on direct wages (Year 1)",
+          "hint": "Number of staff on the payroll this monthly wage figure covers. C32 is now the formula '=E32*F32' -- do not fill C32 directly.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "F32",
+          "label": "Average cost per employee per month (Year 1)",
+          "hint": "Rupees per employee per month. C32 (total monthly wages) = E32 (headcount) x this figure.",
           "default": null,
           "type": "number"
         },
@@ -401,28 +387,28 @@
         {
           "cell": "C50",
           "label": "Raw material holding",
-          "hint": "",
+          "hint": "Number of DAYS of raw-material stock normally held. Use the client's own stated figure if they gave one -- do not substitute a generic industry-typical number over it.",
           "default": null,
           "type": "number"
         },
         {
           "cell": "C51",
           "label": "Finished goods holding",
-          "hint": "",
+          "hint": "Number of DAYS of finished-goods stock normally held. Use the client's own stated figure if they gave one -- do not substitute a generic industry-typical number over it.",
           "default": null,
           "type": "number"
         },
         {
           "cell": "C52",
           "label": "Receivables / debtors",
-          "hint": "",
+          "hint": "Number of DAYS credit normally given to customers before payment. Use the client's own stated figure if they gave one (e.g. '30 days credit') -- do not substitute a generic industry-typical number over it.",
           "default": null,
           "type": "number"
         },
         {
           "cell": "C53",
           "label": "Creditors / payables",
-          "hint": "",
+          "hint": "Number of DAYS credit normally taken from suppliers before payment. Use the client's own stated figure if they gave one -- do not substitute a generic industry-typical number over it.",
           "default": null,
           "type": "number"
         },
@@ -593,6 +579,13 @@
           "default": 0,
           "label": "Existing loan — remaining tenure (MONTHS)",
           "hint": "Months still to run, e.g. 48. Not years."
+        },
+        {
+          "cell": "C79",
+          "type": "number",
+          "default": null,
+          "label": "Pre-operative & preliminary expenses",
+          "hint": "One-time costs incurred before the business opens: registration, licences, architect/consultant fees, interest during construction, trial-run costs, etc. Rupees, not a percentage. This feeds the Cost of Project total (Assumptions!C81), which must tie to the term loan + promoter capital below it -- if the client gave no figure, estimate a realistic one for a project of this size and industry rather than leaving it at 0, since 0 here silently understates the true project cost against the funding being sought."
         }
       ]
     }
