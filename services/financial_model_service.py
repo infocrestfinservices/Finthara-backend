@@ -29,7 +29,8 @@ def _required_headers(config) -> dict:
 
 
 def build_prompt(project: dict, purpose_key: str, agent_context: str,
-                 sample_blueprint: str = "", user_instructions: str = "") -> str:
+                 sample_blueprint: str = "", user_instructions: str = "",
+                 verdict_info: str = "") -> str:
     config = get_config(purpose_key)
     needed = _required_headers(config)
 
@@ -48,6 +49,25 @@ any required section, ADD a new narrative section for it (see the narrative rule
 The one thing you must never do is bend a number to satisfy them: if what they want cannot
 be shown from the figures, say so plainly in the report instead of inventing it.
 """ if ask else ""
+
+    # The workbook's own bankability verdict, computed from the actual recalculated DSCR.
+    # Same reason this is not folded into agent_context as ask_block above: that block is
+    # truncated to 4000 chars, and this instruction — appended after market research,
+    # feasibility and SWOT — never survived the cut (5-report audit bug B: the narrative
+    # kept quoting its own invented DSCR figures and calling a REVIEW-REQUIRED report
+    # "satisfactory" even after the instruction was added, because it never reached the
+    # model at all).
+    verdict_block = f"""
+THE WORKBOOK'S OWN BANKABILITY VERDICT — NON-NEGOTIABLE:
+{verdict_info}
+
+Never state a specific DSCR number anywhere in the narrative (not even "about" or
+"approximately" one) — say "refer to the DSCR schedule in the Excel model" instead. Your
+narrative's tone must match the verdict above exactly: if it is REVIEW REQUIRED or BELOW
+NORM, do not call the project "financially viable", "satisfactory", "comfortably
+serviceable" or similar — state plainly that the figures need verification / coverage
+falls short, consistent with the verdict.
+""" if (verdict_info or "").strip() else ""
 
     sample_block = ""
     if sample_blueprint:
@@ -96,7 +116,7 @@ SAMPLE REPORT BLUEPRINT — this is the reference template for this PURPOSE. Tre
     currency = project.get("currency") or "INR"
 
     return f"""You are a senior Chartered Accountant and financial modeller. You do NOT use a fixed template — you first consider the REPORT PURPOSE below, decide the correct financial-modelling methodology and reporting standard for it, and then produce the model.
-{ask_block}
+{ask_block}{verdict_block}
 REPORT PURPOSE: {config['label']}
 INDUSTRY: {project.get('industry') or 'N/A'}  (sub: {project.get('sub_industry') or 'N/A'})
 COUNTRY / CURRENCY: {project.get('country') or 'N/A'} / {currency}
@@ -181,10 +201,10 @@ def _extract_json(text: str) -> dict:
 
 def generate_financial_model(project: dict, purpose_key: str, agent_context: str = "",
                              model: str = "claude_sonnet_4_6", sample_blueprint: str = "",
-                             user_instructions: str = "") -> dict:
+                             user_instructions: str = "", verdict_info: str = "") -> dict:
     """Return the parsed structured model dict. Raises ValueError on bad output."""
     prompt = build_prompt(project, purpose_key, agent_context, sample_blueprint,
-                          user_instructions)
+                          user_instructions, verdict_info)
     # heavy=True: this is the ONE prompt that asks for the whole report at once (prose +
     # KPIs + several sheets of JSON). On the cheap reasoning model that request consumes the
     # entire 32 K output budget on reasoning and returns EMPTY content (finish_reason=length),

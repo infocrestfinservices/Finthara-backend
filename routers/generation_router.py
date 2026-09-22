@@ -1214,18 +1214,20 @@ def _run_generation(db: Session, project: Project, req: GenerateRequest, prog=No
     # above was not enough on its own: the 5-report audit found the narrative twice
     # quoting a DSCR the workbook did not show, and calling a REVIEW-REQUIRED report
     # "financially viable" with no mention of the caution the sheet itself carries.
+    #
+    # NOT appended to agent_context: that block is truncated to 4000 chars in the prompt
+    # (build_prompt's `agent_context[:4000]`), and agent_context already carries the
+    # market-research + feasibility + SWOT agents' full output ahead of it, so anything
+    # appended after them never survived the cut -- verified: this instruction was added
+    # once already, the same way as the "don't quote DSCR" line, and the narrative still
+    # quoted its own invented DSCR and called a REVIEW-REQUIRED report "satisfactory".
+    # Passed as its own argument instead, the same fix already used for user_instructions.
+    verdict_info = ""
     if real_kpis:
         from services.report_annex_service import verdict_tier
         tier = verdict_tier(real_kpis)
         if tier:
-            agent_context += (
-                f"\n\nWORKBOOK'S OWN VERDICT — {tier[0]} ({tier[1]}). Your narrative's tone "
-                f"must match this exactly. Never state a specific DSCR number anywhere in "
-                f"the narrative -- say 'refer to the DSCR schedule in the Excel model' "
-                f"instead. If the verdict is REVIEW REQUIRED or BELOW NORM, do not call the "
-                f"project 'financially viable', 'comfortably serviceable' or similar -- say "
-                f"plainly that the figures need verification / coverage falls short, "
-                f"consistent with the verdict above.")
+            verdict_info = f"{tier[0]} — {tier[1]}."
 
     sample_blueprint = build_blueprint_text(purpose_key) or ""
     # The user's requirements are passed as their OWN prompt block, not folded into
@@ -1249,7 +1251,8 @@ def _run_generation(db: Session, project: Project, req: GenerateRequest, prog=No
         try:
             model = generate_financial_model(_project_dict(project, answers), purpose_key,
                                              agent_context, sample_blueprint=sample_blueprint,
-                                             user_instructions=user_ask)
+                                             user_instructions=user_ask,
+                                             verdict_info=verdict_info)
         except Exception as e:
             # Not 502 — see the note above on the AI-inputs failure.
             raise HTTPException(status_code=409, detail=f"Model generation failed: {e}")
