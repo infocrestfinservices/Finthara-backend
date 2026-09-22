@@ -421,11 +421,19 @@ _SELLING_PCT = "Assumptions!C40"
 def _monthly_fixed_total(out: dict) -> float:
     """Sum of every monthly fixed/period cost, wages included — the one place this is
     computed, so a cell added to _MONTHLY_FIXED later cannot silently miss the wages half
-    the way the plain sum used to before this existed (see the comment on _MONTHLY_FIXED)."""
+    the way the plain sum used to before this existed (see the comment on _MONTHLY_FIXED).
+
+    This has no `template` to key off (reconcile_scale, its only caller, does not receive
+    one), so it sums the headcount x rate product for EVERY registered template's cell
+    pair (see _HEADCOUNT_CELLS_BY_TEMPLATE) rather than assuming the universal template's
+    D32/E32 — a real project's answers only ever populate one such pair, so this is exact,
+    not a double-count, and stays correct as more templates gain the formula."""
     total = sum(_num(out.get(c)) or 0.0 for c in _MONTHLY_FIXED)
-    hc = _num(out.get("Assumptions!D32")) or 0.0
-    avg_cost = _num(out.get("Assumptions!E32")) or 0.0
-    return total + hc * avg_cost
+    for headcount_cell, avg_cost_cell in _HEADCOUNT_CELLS_BY_TEMPLATE.values():
+        hc = _num(out.get(headcount_cell)) or 0.0
+        avg_cost = _num(out.get(avg_cost_cell)) or 0.0
+        total += hc * avg_cost
+    return total
 
 
 # Where reconcile_scale parks the volume it found before raising it, so a later pass can
@@ -973,7 +981,7 @@ _SELLING_CELL = "Assumptions!C40"
 _MIN_EBITDA_MARGIN = 0.10
 
 
-def reconcile_operating_costs(answers: dict, project) -> dict:
+def reconcile_operating_costs(answers: dict, project, template=None) -> dict:
     """Peg direct wages to what the industry actually spends on people.
 
     Nothing in the pipeline ever compared a PERIOD cost against revenue. `reconcile_scale`
@@ -1004,6 +1012,18 @@ def reconcile_operating_costs(answers: dict, project) -> dict:
     if not band:
         return out
     lo, hi = band
+
+    # Only a template with the headcount x rate mechanism can be adjusted here — on any
+    # other volume_price template C32 is still a plain wages value the AI fills directly,
+    # and there is no _AVG_COST_CELL to write a correction back into (this used to read
+    # module-level _HEADCOUNT_CELL/_AVG_COST_CELL constants that were removed when the
+    # mechanism became per-template; NameError on every volume_price project until this
+    # was made template-aware like reconcile_headcount).
+    tid = (template or {}).get("id")
+    cells = _HEADCOUNT_CELLS_BY_TEMPLATE.get(tid)
+    if not cells:
+        return out
+    _HEADCOUNT_CELL, _AVG_COST_CELL = cells
 
     core = (_num(out.get(_CAPACITY)) or 0.0) * (_num(out.get(_PRICE)) or 0.0)
     streams = sum((_num(out.get(v)) or 0.0) * (_num(out.get(p)) or 0.0)
@@ -1190,8 +1210,20 @@ def reconcile_gestation(answers: dict, project) -> dict:
     return out
 
 
-_HEADCOUNT_CELL = "Assumptions!D32"
-_AVG_COST_CELL = "Assumptions!E32"
+# Only these templates have C32 as the formula '=<headcount cell>*<rate cell>' -- every
+# other CMA template still has C32 as a plain wages VALUE the AI fills directly. This
+# function used to run unconditionally for every CMA-layout template (gated only by
+# _has_cma_layout, which is all 11) and unconditionally popped "Assumptions!C32" out of
+# `answers` -- silently deleting the real wages figure on the 9 templates that don't have
+# the formula, since fill_template never got a chance to write anything back into C32 for
+# them (5-report audit follow-up, caught while adding hotel_cma below: this was already
+# live and affecting retail/restaurant/software/hospital/education/media/trading/
+# transport/other before hotel_cma was added here).
+_HEADCOUNT_CELLS_BY_TEMPLATE = {
+    "bank_loan_cma": ("Assumptions!D32", "Assumptions!E32"),
+    "cma_tourism_hospitality_room_nights_sold_average_room_tariff_arr_e868033b":
+        ("Assumptions!E32", "Assumptions!F32"),
+}
 # Generic fallback when the AI leaves both blank — a small unit's typical staffing.
 # Only used as a last resort; reconcile_operating_costs (below) then pulls the
 # TOTAL into the industry's labour_pct band, which is what actually sizes it.
@@ -1199,32 +1231,41 @@ _DEFAULT_HEADCOUNT = 5
 _DEFAULT_AVG_COST = 25000.0
 
 
-def reconcile_headcount(answers: dict, project) -> dict:
-    """Make sure Assumptions!D32 (headcount) and E32 (avg cost/employee) are both
-    usable numbers, since C32 is now the FORMULA '=D32*E32' (see the template fix
-    for bug 12) rather than a value the AI fills directly — a blank or zero D32
-    would make the whole wages line zero regardless of what E32 says, the same
-    failure mode bug 3's power/fuel guard exists for.
+def reconcile_headcount(answers: dict, project, template=None) -> dict:
+    """Make sure the headcount and avg-cost cells are both usable numbers, on whichever
+    template actually models wages as headcount x rate (see _HEADCOUNT_CELLS_BY_TEMPLATE)
+    -- a blank or zero headcount would make the whole wages line zero regardless of what
+    the rate cell says, the same failure mode bug 3's power/fuel guard exists for.
+
+    A no-op on any template not in that registry: those still have C32 as a plain wages
+    value the AI fills directly, and must be left alone.
     """
     if not isinstance(answers, dict):
         return answers
+    tid = (template or {}).get("id")
+    cells = _HEADCOUNT_CELLS_BY_TEMPLATE.get(tid)
+    if not cells:
+        return answers
+    headcount_cell, avg_cost_cell = cells
     out = dict(answers)
-    hc = _num(out.get(_HEADCOUNT_CELL))
-    cost = _num(out.get(_AVG_COST_CELL))
+    hc = _num(out.get(headcount_cell))
+    cost = _num(out.get(avg_cost_cell))
     if hc is None or hc <= 0:
-        out[_HEADCOUNT_CELL] = _DEFAULT_HEADCOUNT
+        out[headcount_cell] = _DEFAULT_HEADCOUNT
         hc = _DEFAULT_HEADCOUNT
-        logger.info("headcount: D32 missing/zero; defaulted to %d employees", hc)
+        logger.info("headcount: %s missing/zero; defaulted to %d employees",
+                    headcount_cell, hc)
     if cost is None or cost <= 0:
-        out[_AVG_COST_CELL] = _DEFAULT_AVG_COST
-        logger.info("headcount: E32 missing/zero; defaulted to Rs %.0f / employee / month",
-                    _DEFAULT_AVG_COST)
+        out[avg_cost_cell] = _DEFAULT_AVG_COST
+        logger.info("headcount: %s missing/zero; defaulted to Rs %.0f / employee / month",
+                    avg_cost_cell, _DEFAULT_AVG_COST)
     # Projects generated before C32 became a formula still carry a stored
     # "Assumptions!C32" answer (the AI's old plain-number wage guess). fill_template
     # writes every key in `answers` straight into its cell, so that stale value was
-    # silently overwriting the template's own '=D32*E32' formula on every regeneration
-    # -- the wages fix never actually took effect for any pre-existing project. Drop it
-    # so the formula stands.
+    # silently overwriting the template's own formula on every regeneration -- the
+    # wages fix never actually took effect for any pre-existing project. Drop it so
+    # the formula stands. Safe here specifically because `cells` above already
+    # confirmed this template has the formula.
     out.pop("Assumptions!C32", None)
     return out
 

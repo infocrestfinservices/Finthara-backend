@@ -423,7 +423,7 @@ def _reconcile_all(answers: dict, project: Project, template=None) -> dict:
     # C32 (direct wages) is now a formula over D32 (headcount) x E32 (avg cost/employee)
     # — see reconcile_operating_costs below, which reads their product — so both must be
     # numeric before the scale/streams/labour loop runs.
-    answers = reconcile_headcount(answers, project)
+    answers = reconcile_headcount(answers, project, template)
     # Scale, streams and labour are MUTUALLY dependent, and running them once in a line is
     # not enough. The volume is solved from the fixed costs; the streams are sized off the
     # volume; the wage bill is pegged to the revenue the streams complete — and that wage
@@ -441,7 +441,7 @@ def _reconcile_all(answers: dict, project: Project, template=None) -> dict:
         answers = reconcile_streams(answers, project)
         # Labour is measured against TOTAL revenue, so it must run AFTER the streams are
         # sized — that is what makes the ancillary income carry its share of the staffing.
-        answers = reconcile_operating_costs(answers, project)
+        answers = reconcile_operating_costs(answers, project, template)
         after = _num_or_none(answers.get("Assumptions!C16"))
         if before is None or after is None or abs(after - before) <= abs(before) * 0.005:
             break

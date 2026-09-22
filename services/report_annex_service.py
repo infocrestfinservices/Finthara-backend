@@ -185,17 +185,38 @@ def _conclusion_text(project, kpis: dict) -> str:
         except (TypeError, ValueError):
             pass
 
+    # The closing line asserts viability only when tier says so -- it used to default to
+    # "financially viable" whenever scale_flag was falsy, which is also what an EMPTY kpis
+    # dict gives (no data at all, e.g. the recalc did not run) -- so a report with a
+    # REVIEW REQUIRED verdict, or simply no verdict computed yet, still closed on a
+    # confident "financially viable" (5-report audit follow-up: the Excel Conclusion
+    # sheet's own BANKABILITY VERDICT went dynamic in bug 4, but this paragraph — which
+    # both the sheet and the Word report show — never became conditional on it).
     if scale_flag:
         parts.append(
             "On this basis the proposal cannot yet be confirmed as viable: the figures "
             "above should be checked against the promoter's actual capacity, pricing and "
             "cost inputs before this report is relied upon for a sanction decision."
         )
-    else:
+    elif tier and tier[0] in ("STRONG", "BANKABLE"):
         parts.append(
             "On the strength of the projected financials, ratios and coverage set out above, "
             "the proposal is considered financially viable, subject to the assumptions holding "
             "and the usual terms of sanction."
+        )
+    elif tier:  # BELOW NORM
+        parts.append(
+            "On the figures above, the proposal's coverage falls short of the bank's norm; "
+            "the debt structure, margins or promoter contribution should be revisited before "
+            "a viability conclusion can be drawn."
+        )
+    else:
+        # No DSCR/verdict data was available to this paragraph at all -- say so plainly
+        # rather than asserting a conclusion the figures were never checked against.
+        parts.append(
+            "The proposal's viability rests on the projected financials, ratios and coverage "
+            "in this workbook; refer to the DSCR schedule and the Bankability Verdict above "
+            "for the specific conclusion those figures support."
         )
     return "  ".join(parts)
 
