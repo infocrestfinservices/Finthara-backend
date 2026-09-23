@@ -175,10 +175,17 @@ Rules:{f'''
   Year 1-Year 5 revenue figure or range — a report that quoted "1.36 Cr to 2.1 Cr" while
   the workbook's own Net Sales row read something else entirely, in the same document,
   is exactly the failure this rule exists to stop. Describe the revenue TRAJECTORY
-  qualitatively instead (e.g. "revenue is projected to grow steadily as capacity
-  utilisation ramps up over the five years") unless a specific figure is explicitly given
-  to you above (PURPOSE-SPECIFIC ANSWERS or VERIFIED HEADLINE FIGURES), in which case use
-  that exact number and no other.
+  qualitatively instead, and let the actual inputs above decide which way it goes — do
+  NOT default to describing growth. If capacity utilisation, volume or price escalate
+  upward across the years, say something like "revenue is projected to grow steadily as
+  capacity utilisation ramps up over the five years"; if a stream's utilisation, volume or
+  price instead falls or stays flat across the years, say so plainly (e.g. "revenue is
+  projected to ease over the five years as utilisation declines" or "revenue is expected
+  to hold broadly flat") — never phrase a falling or flat trajectory as growth. This
+  mirrors the DSCR rule above: describe what the numbers actually show, never what a
+  report "normally" says. Use a specific number only if one is explicitly given to you
+  above (PURPOSE-SPECIFIC ANSWERS or VERIFIED HEADLINE FIGURES), in which case use that
+  exact number and no other.
 - Every field above that has a real value — PROMOTER, HEADLINE FINANCES (project_cost,
   own_contribution, loan), or any PURPOSE-SPECIFIC ANSWER — IS provided. Never write that
   the promoter is "not identified", or that the project cost / contribution / loan sought
