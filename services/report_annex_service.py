@@ -127,11 +127,25 @@ def _conclusion_text(project, kpis: dict) -> str:
     rev1, rev5 = kpis.get("revenue_y1"), kpis.get("revenue_y5")
     if rev1 and rev5:
         try:
-            growth = (float(rev5) / float(rev1) - 1) * 100 if float(rev1) else 0
+            r1, r5 = float(rev1), float(rev5)
+            # Direction is decided by comparing the two values directly, never by
+            # assuming which way it goes -- "grow" was hardcoded here regardless of the
+            # sign of the actual change, so a report whose revenue fell from Year 1 to
+            # Year 5 still read "is projected to grow ... (-16% over the period)",
+            # contradicting itself in one sentence (the same class of bug already fixed
+            # in statement_commentary._trend_sentence for PAT; this was a second,
+            # separate hardcoded instance this file never inherited that fix). The same
+            # rule applies to every metric's trend language in this function, not just
+            # revenue: derive the direction word from the actual numbers, never assume it.
+            verb = "grow" if r5 > r1 else ("decline" if r5 < r1 else "stay flat")
+            trailer = ("reflecting the capacity build-up and demand assumptions adopted"
+                       if r5 >= r1 else
+                       "which should be checked against the capacity, pricing and demand "
+                       "assumptions adopted")
+            growth = (r5 / r1 - 1) * 100 if r1 else 0
             parts.append(
-                f"Revenue is projected to grow from {_fmt_inr(rev1)} in Year 1 to "
-                f"{_fmt_inr(rev5)} by Year 5 ({growth:+.0f}% over the period), reflecting the "
-                f"capacity build-up and demand assumptions adopted."
+                f"Revenue is projected to {verb} from {_fmt_inr(rev1)} in Year 1 to "
+                f"{_fmt_inr(rev5)} by Year 5 ({growth:+.0f}% over the period), {trailer}."
             )
         except (TypeError, ValueError):
             pass
