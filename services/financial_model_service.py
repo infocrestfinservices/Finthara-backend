@@ -96,12 +96,18 @@ SAMPLE REPORT BLUEPRINT — this is the reference template for this PURPOSE. Tre
     # space where a credit officer expects the whole case. It is the one section a reader
     # may read alone, so it is held to a length, not left to "concise".
     section_specs.append(
-        '- "Executive Summary": must fill A FULL PAGE — at least 500 words in 5-7 '
-        'substantial paragraphs of continuous prose (no headings, no bullets). Cover what '
-        'the business is and proposes to do, the promoter, the market and demand, the cost '
-        'of the project and how it is funded, the projected results and what they mean for '
-        'viability, the coverage available to the lender, and the risks with their '
-        'mitigation. A reader who reads only this page must understand the whole proposal.')
+        '- "Executive Summary": must cover A FULL PAGE of content — the business and what '
+        'it proposes to do, the promoter, the market and demand, the cost of the project '
+        'and how it is funded, the projected results and what they mean for viability, the '
+        'coverage available to the lender, and the risks with their mitigation. Structure: '
+        'a short 1-2 sentence lead-in paragraph that frames the proposal, then break the '
+        'rest into clearly-labelled bullet groups (a short plain-text label line per topic '
+        '— "Business & Promoter", "Market & Demand", "Project Cost & Funding", "Projected '
+        'Results", "Coverage", "Key Risks" — each followed by 2-4 bullet points, not a '
+        'paragraph; see the STRUCTURE rule below on how to write these label lines). A '
+        'reader who reads only this page must understand the whole proposal; '
+        'a wall of continuous prose is not more thorough, it is harder to read at speed, '
+        'which is what a credit officer skimming this page actually needs.')
     section_specs.append(
         '- "Business Model": REQUIRED. Explain in full how this specific business makes '
         'money — what exactly is sold and to whom, the revenue streams and roughly what '
@@ -110,7 +116,10 @@ SAMPLE REPORT BLUEPRINT — this is the reference template for this PURPOSE. Tre
         'cycle (who pays when, what stock is held), the key operating drivers the profit '
         'depends on, and what makes the model defensible. Write it about THIS business '
         'using its own numbers and inputs, not a textbook description of the industry. '
-        '4-6 substantial paragraphs; bullet lines allowed.')
+        'Structure: a short lead-in sentence per sub-topic, then bullet points for the '
+        'supporting detail — not 4-6 dense paragraphs. Prefer bullets over prose wherever '
+        'the content is a list of distinct points (revenue streams, cost items, drivers), '
+        'which is most of this section.')
     answers = project.get("purpose_answers") or {}
 
     currency = project.get("currency") or "INR"
@@ -138,7 +147,7 @@ Return ONLY a single JSON object (no markdown, no commentary) with EXACTLY this 
 
 {{
   "narrative": {{
-{chr(10).join(f'      "{w["title"]}": "<2-4 short paragraphs of professional prose; use \\n for line breaks; bullet lines may start with - >," ' for w in config["word_sections"])}
+{chr(10).join(f'      "{w["title"]}": "<a short 1-2 sentence lead-in, then bullet points (lines starting with -) for the supporting detail -- not a wall of paragraphs; use \\n for line breaks>," ' for w in config["word_sections"])}
   }},
   "kpis": [ {{ "label": "e.g. IRR / DSCR / Break-even", "value": "e.g. 18.4% / 1.85 / 62%" }} ]
 }}
@@ -156,10 +165,21 @@ Rules:{f'''
   structure and emphasis. Re-read them before you write the narrative, and make the change
   they asked for visible in the output — do not return the same report you would have
   written without them.''' if ask else ''}
-- Write PROSE only. Do NOT reproduce the financial statements: every table, schedule and
-  CMA form is generated from the workbook itself, so a table written here is paid for twice
-  and can only disagree with the model. Quote a figure in a sentence where it makes the
-  point, and nothing more.
+- Do NOT reproduce the financial statements as a TABLE: every schedule and CMA form is
+  generated from the workbook itself, so a table written here is paid for twice and can
+  only disagree with the model. Quote a figure in a sentence where it makes the point, and
+  nothing more.
+- STRUCTURE, every section: a short 1-2 sentence lead-in that frames the topic, then break
+  the actual discussion into bullet points (lines starting with -), not long paragraphs.
+  A report made of dense multi-sentence paragraphs back to back reads as long and is hard
+  to skim; the same information in a short intro plus bullets is easier for a credit
+  officer to actually read, and is what this report must look like throughout, not just in
+  the sections that explicitly call it out below. Where a section covers more than one
+  topic, write a short plain-text label line for each group (e.g. "Market & demand:") on
+  its own line right before that group's bullets — do NOT use "**bold**" or "#" markdown
+  for these labels, neither renders as intended here (## becomes a real heading and would
+  wrongly add every label to the report's Table of Contents; ** is not converted to bold
+  and shows up as literal asterisks) — a plain short line is enough to read as a label.
 - Numbers you quote are the ones given above. Do not invent others.
 - You do NOT have an accurate DSCR, IRR or NPV. These require the full multi-year cash-flow
   and repayment-schedule model, which you have not been shown — the loan amount, interest

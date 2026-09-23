@@ -61,12 +61,17 @@ Assess the business and score each category out of 100.
 ## Overall Feasibility Score: X/100
 
 ## Detailed Analysis
-Explain the reasoning behind each score, in the terms set out above.
+For each category above, a "### <Category>" sub-heading, then a short 1-2 sentence
+lead-in explaining the score, followed by bullet points (lines starting with -) for the
+specific reasoning — not a paragraph per category. A page of dense paragraphs reads as
+long and is hard for a lender to skim; the same reasoning as a short intro plus bullets
+is not less thorough, it is easier to read at speed.
 
 ## Key Success Factors
+Bullet each one.
 
 ## Major Risks & Mitigation
-Each risk with the measure that manages it.
+Bullet each risk with the measure that manages it — one bullet per risk, not a paragraph.
 
 Write in Markdown. Do not add an executive summary, a company introduction, a conclusion or
 a recommendation section — the report carries its own.

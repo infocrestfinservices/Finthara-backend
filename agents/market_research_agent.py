@@ -45,6 +45,11 @@ Do NOT write another executive summary, company introduction or overall conclusi
 those belong to the report, not to this section. Begin directly with the market itself and
 END after the risks. Do not add a "Conclusion" or "Recommendations" section.
 
+FORMAT — every section below: a short 1-2 sentence lead-in, then bullet points (lines
+starting with -) for the actual discussion, not paragraphs. A page of dense paragraphs
+reads as long and is hard for a lender to skim; the same content as a short intro plus
+bullets is not less thorough, it is easier to read at speed.
+
 Generate the following sections in Markdown format:
 
 ## 1. Market Overview
@@ -61,7 +66,9 @@ Generate the following sections in Markdown format:
 List the players this business will genuinely compete with in {where} — local
 manufacturers, regional brands and the national names that are actually stocked there.
 ## 5. Market Opportunities
+- Bullet each distinct opportunity, not a paragraph per one
 ## 6. Market Risks
+- Bullet each distinct risk, not a paragraph per one
 
 Use markdown tables where they help. Keep every figure specific to {scope}.
 """
