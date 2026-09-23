@@ -34,13 +34,20 @@ from purpose_config import get_config
 
 logger = logging.getLogger("word_builder")
 
-# ── palette (from the reference report) ─────────────────────────────────────────
-INDIGO = RGBColor(0x5B, 0x5B, 0xF5)
-INDIGO_HEX = "5B5BF5"
-INDIGO_DEEP = RGBColor(0x2B, 0x2B, 0xD4)
-INDIGO_DEEP_HEX = "2B2BD4"
-LAVENDER = "EFEFFB"          # alternating table rows
-LAVENDER_SOFT = "F6F6FD"
+# ── palette (navy + gold) ────────────────────────────────────────────────────
+# Same two-tone relationship the old indigo palette had (a lighter tone for fills/
+# top-level accents, a deeper one for secondary text/headings) -- only the hues
+# changed, purple/indigo to navy, plus a new gold accent for thin divider lines.
+# Every name below is unchanged so none of its ~40 call sites needed touching;
+# only the values moved, which is what keeps layout/structure exactly as it was.
+INDIGO = RGBColor(0x0F, 0x2A, 0x4A)       # navy -- fills, level-1 heading text
+INDIGO_HEX = "0F2A4A"
+INDIGO_DEEP = RGBColor(0x0A, 0x1E, 0x36)  # deep navy -- level-2 headings, sub-accents
+INDIGO_DEEP_HEX = "0A1E36"
+GOLD = RGBColor(0xC9, 0xA9, 0x6A)         # gold -- thin divider/underline accent only
+GOLD_HEX = "C9A96A"
+LAVENDER = "E7ECF2"           # alternating table rows -- pale navy tint, not purple
+LAVENDER_SOFT = "F2F5F8"
 INK = RGBColor(0x1C, 0x1C, 0x22)
 GREY = RGBColor(0x6B, 0x70, 0x80)
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
@@ -270,7 +277,7 @@ def _shade_paragraph(paragraph, hex_fill):
     pPr.append(shd)
 
 
-def _bottom_rule(paragraph, color=INDIGO_HEX, size=6):
+def _bottom_rule(paragraph, color=GOLD_HEX, size=6):
     """A thin coloured line under a paragraph — used to underline main headings."""
     pPr = paragraph._p.get_or_add_pPr()
     pbdr = OxmlElement("w:pBdr")
@@ -805,7 +812,7 @@ def _cover(doc, config, project):
     ribbon_text = (f"{ask} Proposal" if ask else f"{config['label']} Proposal").upper()
     ribbon = para(ribbon_text, size=11, bold=True, color=INDIGO_DEEP,
                   space_before=2, space_after=2)
-    _shade_paragraph(ribbon, "ECECFB")
+    _shade_paragraph(ribbon, "F3EAD3")  # pale gold, for the navy ribbon text above
     body.add_paragraph()
     # eyebrow label (report type) — small, tracked, above the business name
     para(config["label"].upper(), size=11, bold=True, color=INDIGO,
@@ -1048,7 +1055,7 @@ def _assumptions_table(doc, rows, numbering):
         if value is None:
             _cell_text(cells[0], label, bold=True, size=9, color=INDIGO_DEEP)
             for c in cells:
-                _shade(c, "E4E4FA")
+                _shade(c, "DCE3EB")
             continue
         _cell_text(cells[0], label, size=9)
         # An assumption's "value" is usually a figure, but some are words ("Straight
@@ -1123,7 +1130,7 @@ def _statement_table(doc, headers, rows):
         if is_heading:
             _cell_text(cells[0], cells_text[0], bold=True, size=9, color=INDIGO_DEEP)
             for c in cells:
-                _shade(c, "E4E4FA")
+                _shade(c, "DCE3EB")
             continue
         for i, val in enumerate(cells_text):
             _cell_text(cells[i], val, size=9,
