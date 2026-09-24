@@ -15,6 +15,35 @@ from services.claude_service import invoke_llm
 from purpose_config import get_config
 
 
+def _fmt_money(v, currency: str = "INR") -> str | None:
+    """Indian lakh/crore digit grouping with a currency symbol, for figures quoted
+    inline in the narrative. Feeding the model an already-formatted headline figure
+    is more reliable than asking it to apply Indian-style grouping itself -- it was
+    writing bare digits like "8500000" straight into bullets when only told the
+    JSON's own numbers must be plain (a rule left over from when this prompt also
+    returned full numeric sheets; see the "sheets" comment further down)."""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return None
+    if currency != "INR":
+        return f"{currency} {v:,.0f}"
+    neg = v < 0
+    digits = str(int(round(abs(v))))
+    if len(digits) <= 3:
+        grouped = digits
+    else:
+        last3, rest = digits[-3:], digits[:-3]
+        parts = []
+        while len(rest) > 2:
+            parts.insert(0, rest[-2:])
+            rest = rest[:-2]
+        if rest:
+            parts.insert(0, rest)
+        grouped = ",".join(parts) + "," + last3
+    return f"{'-' if neg else ''}₹{grouped}"
+
+
 def _required_headers(config) -> dict:
     """For each sheet, collect the column headers the dashboard charts need so
     the AI is told to include them."""
@@ -100,14 +129,15 @@ SAMPLE REPORT BLUEPRINT — this is the reference template for this PURPOSE. Tre
         'it proposes to do, the promoter, the market and demand, the cost of the project '
         'and how it is funded, the projected results and what they mean for viability, the '
         'coverage available to the lender, and the risks with their mitigation. Structure: '
-        'a short 1-2 sentence lead-in paragraph that frames the proposal, then break the '
-        'rest into clearly-labelled bullet groups (a short plain-text label line per topic '
-        '— "Business & Promoter", "Market & Demand", "Project Cost & Funding", "Projected '
-        'Results", "Coverage", "Key Risks" — each followed by 2-4 bullet points, not a '
-        'paragraph; see the STRUCTURE rule below on how to write these label lines). A '
-        'reader who reads only this page must understand the whole proposal; '
-        'a wall of continuous prose is not more thorough, it is harder to read at speed, '
-        'which is what a credit officer skimming this page actually needs.')
+        'break it into clearly-labelled topic groups (a short plain-text label line per '
+        'topic — "Business & Promoter", "Market & Demand", "Project Cost & Funding", '
+        '"Projected Results", "Coverage", "Key Risks"), each opening with a proper paragraph '
+        '(several full sentences, not a one-liner) that actually explains that topic, '
+        'followed by 2-4 bullet points that pull out the specific figures worth scanning '
+        'separately (see the STRUCTURE rule below on how to write these label lines and on '
+        'paragraph-then-bullets ordering). A reader who reads only this page must understand '
+        'the whole proposal; a page of nothing but bullet fragments is not more readable, it '
+        'reads as a list of disconnected facts instead of the case being argued.')
     section_specs.append(
         '- "Business Model": REQUIRED. Explain in full how this specific business makes '
         'money — what exactly is sold and to whom, the revenue streams and roughly what '
@@ -116,13 +146,16 @@ SAMPLE REPORT BLUEPRINT — this is the reference template for this PURPOSE. Tre
         'cycle (who pays when, what stock is held), the key operating drivers the profit '
         'depends on, and what makes the model defensible. Write it about THIS business '
         'using its own numbers and inputs, not a textbook description of the industry. '
-        'Structure: a short lead-in sentence per sub-topic, then bullet points for the '
-        'supporting detail — not 4-6 dense paragraphs. Prefer bullets over prose wherever '
-        'the content is a list of distinct points (revenue streams, cost items, drivers), '
-        'which is most of this section.')
+        'Structure: a substantial paragraph per sub-topic (see the STRUCTURE rule below — '
+        'aim for at least 8 lines of real prose, not a one-line teaser), then bullet points '
+        'afterward for the supporting specifics.')
     answers = project.get("purpose_answers") or {}
 
     currency = project.get("currency") or "INR"
+
+    def _hf(key):
+        v = project.get(key)
+        return _fmt_money(v, currency) or "N/A"
 
     return f"""You are a senior Chartered Accountant and financial modeller. You do NOT use a fixed template — you first consider the REPORT PURPOSE below, decide the correct financial-modelling methodology and reporting standard for it, and then produce the model.
 {ask_block}{verdict_block}
@@ -133,7 +166,8 @@ BUSINESS: {project.get('title') or 'N/A'}
 PROMOTER: {project.get('promoter_name') or 'N/A'} — {project.get('promoter_experience') or 'N/A'}
 DESCRIPTION: {project.get('project_description') or 'N/A'}
 TARGET MARKET: {project.get('target_market') or 'N/A'}
-HEADLINE FINANCES: project_cost={project.get('project_cost')}, own_contribution={project.get('own_contribution')}, loan={project.get('loan_amount')}
+HEADLINE FINANCES: project_cost={_hf('project_cost')}, own_contribution={_hf('own_contribution')}, loan={_hf('loan_amount')}
+(quote these exact formatted figures verbatim wherever the narrative mentions them — do not strip the commas/symbol back out)
 
 PURPOSE-SPECIFIC ANSWERS (use these as the primary numeric inputs; infer reasonable values for anything missing and state assumptions):
 {json.dumps(answers, indent=2)}
@@ -141,13 +175,13 @@ PURPOSE-SPECIFIC ANSWERS (use these as the primary numeric inputs; infer reasona
 SUPPORTING ANALYSIS FROM PRIOR AGENTS (use for narrative, do not contradict):
 {agent_context[:4000]}
 {sample_block}
-Produce a complete, internally-consistent model. All monetary values are PLAIN NUMBERS in {currency} (no commas, no symbols, no text). Use realistic CA-grade figures derived from the inputs. Projections cover the standard horizon for this purpose (typically 5 years; for CMA use 2 past + 3 projected).
+Produce a complete, internally-consistent model. The PURPOSE-SPECIFIC ANSWERS above are given as plain numbers for you to read; use realistic CA-grade figures derived from the inputs. Projections cover the standard horizon for this purpose (typically 5 years; for CMA use 2 past + 3 projected).
 
 Return ONLY a single JSON object (no markdown, no commentary) with EXACTLY this shape:
 
 {{
   "narrative": {{
-{chr(10).join(f'      "{w["title"]}": "<a short 1-2 sentence lead-in, then bullet points (lines starting with -) for the supporting detail -- not a wall of paragraphs; use \\n for line breaks>," ' for w in config["word_sections"])}
+{chr(10).join(f'      "{w["title"]}": "<a substantial paragraph of real prose (at least 8 lines) that actually explains the topic, THEN bullet points (lines starting with -) after it for the supporting specifics -- not a one-line teaser followed by a wall of bullets; use \\n for line breaks>," ' for w in config["word_sections"])}
   }},
   "kpis": [ {{ "label": "e.g. IRR / DSCR / Break-even", "value": "e.g. 18.4% / 1.85 / 62%" }} ]
 }}
@@ -169,18 +203,27 @@ Rules:{f'''
   generated from the workbook itself, so a table written here is paid for twice and can
   only disagree with the model. Quote a figure in a sentence where it makes the point, and
   nothing more.
-- STRUCTURE, every section: a short 1-2 sentence lead-in that frames the topic, then break
-  the actual discussion into bullet points (lines starting with -), not long paragraphs.
-  A report made of dense multi-sentence paragraphs back to back reads as long and is hard
-  to skim; the same information in a short intro plus bullets is easier for a credit
-  officer to actually read, and is what this report must look like throughout, not just in
-  the sections that explicitly call it out below. Where a section covers more than one
-  topic, write a short plain-text label line for each group (e.g. "Market & demand:") on
-  its own line right before that group's bullets — do NOT use "**bold**" or "#" markdown
-  for these labels, neither renders as intended here (## becomes a real heading and would
+- STRUCTURE, every section: open with a real paragraph of continuous prose — aim for at
+  least 8 lines — that actually explains and argues the topic in full sentences, the way a
+  Chartered Accountant would write it up, not a one-line teaser. Only AFTER that paragraph,
+  add a short bullet list (lines starting with -, normally 3-6 bullets) to call out the
+  specific standout figures or points worth a lender scanning separately. The paragraph
+  carries the actual explanation; the bullets that follow it are a supporting recap of the
+  specifics, not the primary content — a section that is nothing but short bullet
+  fragments back to back reads as a list of disconnected facts, not the case being argued.
+  Where a section covers more than one topic, repeat this same pattern (paragraph, then
+  bullets) separately for each topic, with a short plain-text label line before each
+  topic's paragraph (e.g. "Market & demand:") — do NOT use "**bold**" or "#" markdown for
+  these labels, neither renders as intended here (## becomes a real heading and would
   wrongly add every label to the report's Table of Contents; ** is not converted to bold
   and shows up as literal asterisks) — a plain short line is enough to read as a label.
 - Numbers you quote are the ones given above. Do not invent others.
+- Whenever you write a rupee/currency amount anywhere in the narrative or in a "kpis"
+  value — not a day-count, month, percentage, ratio or other non-monetary figure, only
+  an actual sum of money — format it in Indian digit grouping with the currency symbol,
+  e.g. ₹85,00,000 or ₹1,20,00,000, never as a bare number like 8500000. The HEADLINE
+  FINANCES figures above are already given to you pre-formatted this way; reuse them as
+  given rather than reformatting your own way.
 - You do NOT have an accurate DSCR, IRR or NPV. These require the full multi-year cash-flow
   and repayment-schedule model, which you have not been shown — the loan amount, interest
   rate and tenure above are not enough to compute them correctly, even approximately.

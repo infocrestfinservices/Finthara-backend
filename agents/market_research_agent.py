@@ -45,10 +45,11 @@ Do NOT write another executive summary, company introduction or overall conclusi
 those belong to the report, not to this section. Begin directly with the market itself and
 END after the risks. Do not add a "Conclusion" or "Recommendations" section.
 
-FORMAT — every section below: a short 1-2 sentence lead-in, then bullet points (lines
-starting with -) for the actual discussion, not paragraphs. A page of dense paragraphs
-reads as long and is hard for a lender to skim; the same content as a short intro plus
-bullets is not less thorough, it is easier to read at speed.
+FORMAT — every section below: open with a real paragraph (at least 8 lines of continuous
+prose) that actually discusses the topic in full sentences, and only AFTER that paragraph
+add a short bullet list (lines starting with -) to call out the specific standout points —
+not a one-line teaser followed by a wall of bullets. The paragraph carries the actual
+analysis; the bullets afterward are a supporting recap, not the primary content.
 
 Generate the following sections in Markdown format:
 

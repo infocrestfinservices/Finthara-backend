@@ -460,6 +460,8 @@ def _render_markdownish(doc, text):
             continue
         if line.startswith(("- ", "* ", "• ")):
             p = doc.add_paragraph(line[2:].strip(), style="List Bullet")
+            for r in p.runs:
+                r.font.size = Pt(9.5)
         else:
             p = doc.add_paragraph(line)
             p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
@@ -471,7 +473,39 @@ def _render_markdownish(doc, text):
     _cut_hold(held)
 
 
+_DOCX_NATIVE_IMAGE_FORMATS = {"PNG", "JPEG", "GIF", "BMP", "TIFF", "WMF", "EMF"}
+
+
+def _normalize_image(raw: bytes):
+    """python-docx's embedder only recognises PNG/JPEG/GIF/BMP/TIFF/WMF/EMF. A browser file
+    picker with accept="image/*" also lets through AVIF, WEBP and other formats it can
+    preview natively -- a client's own uploaded photo showed a fine thumbnail in the
+    "Insert your own pictures" panel, then silently never made it into the downloaded
+    Word file (UnrecognizedImageError, caught and swallowed a layer up). Re-encode
+    anything Pillow can read but python-docx can't into PNG before it gets here."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return raw
+    try:
+        img = Image.open(io.BytesIO(raw))
+        if (img.format or "").upper() in _DOCX_NATIVE_IMAGE_FORMATS:
+            return raw
+        img.load()
+        if img.mode not in ("RGB", "RGBA", "L"):
+            img = img.convert("RGB")
+        out = io.BytesIO()
+        img.save(out, format="PNG")
+        return out.getvalue()
+    except Exception:
+        logger.warning("word_builder: could not decode an image for embedding", exc_info=True)
+        return None
+
+
 def _add_image(doc, png_bytes, width_in):
+    if not png_bytes:
+        return
+    png_bytes = _normalize_image(png_bytes)
     if not png_bytes:
         return
     doc.add_picture(io.BytesIO(png_bytes), width=Inches(width_in))
@@ -572,10 +606,14 @@ def _toc_pages(doc, entries=None, figures=None, tables=None):
 
     Each argument is [(level, text, page)]. A page of None prints blank, so the measuring
     pass paginates identically to the final document.
+
+    Only the Table of Contents is actually printed — the List of Figures / List of Tables
+    pages were dropped from the front matter on request. `figures`/`tables` stay as
+    parameters (unused here) because `_measure_pages` still needs the individual "Figure
+    N: …" / "Table N: …" captions under each chart/table located for their own numbering,
+    and callers still pass them through.
     """
     _list_block(doc, "Table of Contents", "Section", entries)
-    _list_block(doc, "List of Figures", "Figure", figures, bold_top=False)
-    _list_block(doc, "List of Tables", "Table", tables, bold_top=False)
 
 
 def _heading_list(doc):
@@ -595,7 +633,7 @@ def _heading_list(doc):
     return out
 
 
-_FRONT_MATTER = ("Table of Contents", "List of Figures", "List of Tables")
+_FRONT_MATTER = ("Table of Contents",)
 
 
 def _measure_pages(docx_bytes, headings, captions=()):

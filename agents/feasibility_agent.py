@@ -61,11 +61,11 @@ Assess the business and score each category out of 100.
 ## Overall Feasibility Score: X/100
 
 ## Detailed Analysis
-For each category above, a "### <Category>" sub-heading, then a short 1-2 sentence
-lead-in explaining the score, followed by bullet points (lines starting with -) for the
-specific reasoning — not a paragraph per category. A page of dense paragraphs reads as
-long and is hard for a lender to skim; the same reasoning as a short intro plus bullets
-is not less thorough, it is easier to read at speed.
+For each category above, a "### <Category>" sub-heading, then a real paragraph (at least
+8 lines of continuous prose) that actually explains the score, followed by bullet points
+(lines starting with -) afterward for the specific supporting reasoning — not a one-line
+teaser followed by a wall of bullets. The paragraph carries the actual analysis; the
+bullets afterward are a supporting recap, not the primary content.
 
 ## Key Success Factors
 Bullet each one.
