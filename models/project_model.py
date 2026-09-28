@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
@@ -26,6 +26,10 @@ class Project(Base):
     report_format = Column(String, nullable=True)
     financial_format = Column(String, nullable=True)
     status = Column(String, default="draft")
+    # A one-time report credit (Entrepreneur) was spent on this project. Keeps a failed first
+    # generation retryable without spending a second credit, and keeps credit-paid projects
+    # out of a Consultant plan's per-cycle count.
+    paid_with_credit = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     user = relationship("User", back_populates="projects")
     # Deleting a project removes its dependent rows (their FKs are NOT NULL,

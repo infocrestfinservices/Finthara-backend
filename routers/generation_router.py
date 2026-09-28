@@ -26,7 +26,7 @@ from models.report_model import Report
 from models.questionnaire_model import QuestionnaireAnswer
 from dependencies import get_owned_project, get_current_user, require_project_editor
 from models.user_model import User
-from services.entitlements import may_generate, may_export
+from services.entitlements import claim_generation, may_export
 from services import generation_jobs
 
 from purpose_config import resolve_purpose, get_config
@@ -952,7 +952,9 @@ def generate(req: GenerateRequest, project: Project = Depends(require_project_ed
     of a report the user has, not a new one, and the product actively encourages re-running
     it.
     """
-    _require(may_generate(db, _plan_holder(db, project, current_user), project.id))
+    # claim, not just check: a new project paid for with a one-time Entrepreneur credit
+    # spends that credit here (see services.entitlements.claim_generation).
+    _require(claim_generation(db, _plan_holder(db, project, current_user), project))
 
     active = generation_jobs.find_active(db, project.id)
     if active:

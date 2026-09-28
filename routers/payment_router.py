@@ -1,4 +1,4 @@
-"""Razorpay checkout for the three pricing plans.
+"""Razorpay checkout for the pricing plans (Entrepreneur one-time, Consultant & CA monthly/yearly).
 
 The one rule everything here is built around: **the price is decided by the server**. The
 browser says which plan it wants, never what it costs. If the amount came from the client,
@@ -291,7 +291,9 @@ def preview_coupon(req: CouponPreview, current_user: User = Depends(get_current_
         coupon, discount, final = coupon_service.validate(db, req.code, req.plan, current_user)
     except coupon_service.CouponError as e:
         return {"valid": False, "message": str(e)}
-    spec = PLANS[req.plan.strip().lower()]
+    spec = PLANS.get(req.plan.strip().lower())
+    if not spec:
+        return {"valid": False, "message": "That plan is not for sale."}
     return {
         "valid": True, "code": coupon.code,
         "description": coupon.description,
@@ -348,12 +350,13 @@ class SubscribeRequest(BaseModel):
 @router.post("/subscribe")
 def start_subscription(req: SubscribeRequest, current_user: User = Depends(get_current_user),
                        db: Session = Depends(get_db)):
-    """Begin auto-pay for a monthly plan. Returns what the checkout needs."""
+    """Begin auto-pay for a monthly or yearly plan. Returns what the checkout needs."""
     plan = (req.plan or "").strip().lower()
-    if plan not in subs.RECURRING:
+    # PLANS here is only what is for sale, so a legacy plan cannot start a NEW mandate.
+    if plan not in subs.RECURRING or plan not in PLANS:
         raise HTTPException(
             status_code=400,
-            detail=f"{req.plan} is not a monthly plan.")
+            detail=f"{req.plan} is not a recurring plan.")
     if not subs.enabled():
         raise HTTPException(status_code=409, detail="Payments are not configured.")
     allowed, why = can_purchase(db, current_user, plan)

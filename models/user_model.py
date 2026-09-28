@@ -17,6 +17,9 @@ class User(Base):
     # expire. services.entitlements.effective_plan reads this on every request rather than
     # relying on a scheduled job, so an expiry cannot be missed.
     plan_expires_at = Column(DateTime, nullable=True)
+    # Unspent one-time report credits. Each Entrepreneur purchase adds one; generating a new
+    # project that no cycle allowance covers spends one (services.entitlements).
+    report_credits = Column(Integer, default=0, nullable=False)
     # Staff access to the admin panel. A separate flag rather than a role string because
     # there are exactly two kinds of person here — the team and the customers — and a role
     # table nobody needs is a thing to keep in step for no benefit. Never settable through

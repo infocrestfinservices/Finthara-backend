@@ -34,9 +34,15 @@ from services.entitlements import PLANS
 
 logger = logging.getLogger("subscriptions")
 
-# Which of our plans are recurring. Starter is a one-time purchase and stays on the Orders
-# flow — putting a mandate on a product sold as "pay once" would be a different product.
+# Which of our plans are recurring. Entrepreneur is a one-time purchase and stays on the
+# Orders flow — putting a mandate on a product sold as "pay once" would be a different product.
+# Includes the legacy monthly plans so mandates already running on them are still honoured by
+# the webhook; the /subscribe route separately refuses to START one on a plan not for sale.
 RECURRING = {k for k, v in PLANS.items() if v["period_days"]}
+
+# Razorpay's own period names. Anything not yearly is billed monthly.
+def _rzp_period(spec: dict) -> str:
+    return "yearly" if spec.get("period") == "yearly" else "monthly"
 
 # Razorpay subscription states in which the customer is genuinely entitled to the plan.
 # `halted` is deliberately NOT one: a halted subscription is a card that failed and has
@@ -89,14 +95,15 @@ def find_or_create_plan(our_plan: str) -> str:
     except Exception:
         logger.warning("subscriptions: could not list existing plans", exc_info=True)
 
+    period = _rzp_period(spec)
     created = c.plan.create({
-        "period": "monthly",
+        "period": period,
         "interval": 1,
         "item": {
-            "name": f"{spec['label']} (monthly)",
+            "name": f"{spec['label']} ({period})",
             "amount": int(spec["amount"] * 100),
             "currency": "INR",
-            "description": f"Finthara {spec['label']} plan, billed monthly",
+            "description": f"Finthara {spec['label']} plan, billed {period}",
         },
         "notes": {"app_plan": our_plan},
     }, timeout=15)
@@ -104,13 +111,15 @@ def find_or_create_plan(our_plan: str) -> str:
     return created["id"]
 
 
-def create_subscription(user, our_plan: str, total_count: int = 120) -> dict:
+def create_subscription(user, our_plan: str, total_count: int | None = None) -> dict:
     """Start a mandate for this user. Returns the raw Razorpay subscription.
 
     `total_count` is how many cycles the mandate covers — Razorpay requires a finite number,
     so it is set to ten years rather than to something the customer would hit and silently
     lose their plan over.
     """
+    if total_count is None:
+        total_count = 10 if _rzp_period(PLANS[our_plan]) == "yearly" else 120
     plan_id = find_or_create_plan(our_plan)
     sub = client().subscription.create({
         "plan_id": plan_id,

@@ -66,6 +66,10 @@ ensure_columns("users", {
     "totp_backup_codes": "VARCHAR",
     "is_deleted": "BOOLEAN NOT NULL DEFAULT false",
     "deleted_at": "TIMESTAMP",
+    "report_credits": "INTEGER NOT NULL DEFAULT 0",
+})
+ensure_columns("projects", {
+    "paid_with_credit": "BOOLEAN NOT NULL DEFAULT false",
 })
 ensure_columns("payments", {
     "gateway": "VARCHAR NOT NULL DEFAULT 'razorpay'",

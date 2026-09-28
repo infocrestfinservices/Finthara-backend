@@ -29,7 +29,7 @@ from models.payment_model import Payment
 from models.project_model import Project
 from models.report_model import Report
 from models.user_model import User
-from services.entitlements import (PLANS, RANK, effective_plan, expiry_for,
+from services.entitlements import (PLANS, RANK, effective_plan, expiry_for, grant_plan,
                                    plan_spec)
 
 logger = logging.getLogger("admin")
@@ -143,12 +143,17 @@ def set_plan(user_id: int, body: PlanOverride, db: Session = Depends(get_db),
         raise HTTPException(status_code=404, detail="User not found")
 
     was, was_exp = user.plan, user.plan_expires_at
-    user.plan = plan
-    if body.days is not None:
+    if PLANS[plan].get("topup"):
+        # Entrepreneur is a report credit, not a period: granting it adds one report, exactly
+        # as a purchase would, and leaves any better running plan alone.
+        grant_plan(user, plan)
+    elif body.days is not None:
+        user.plan = plan
         from datetime import timedelta
         user.plan_expires_at = (datetime.utcnow() + timedelta(days=body.days)
                                 if body.days > 0 else None)
     else:
+        user.plan = plan
         user.plan_expires_at = expiry_for(plan)
     db.commit()
     # Money moved without a payment record, so the log is the only trace there will be.

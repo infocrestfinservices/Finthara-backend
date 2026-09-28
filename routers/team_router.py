@@ -1,7 +1,7 @@
 """Team seats — invite people onto your account, give them a role, manage them.
 
 A "company" is your own account (identified by your user id); its members share your
-Advanced plan's seats and, per their role, your projects:
+Consultant & CA plan's seats and, per their role, your projects:
   viewer  — read your projects, view and download their reports
   editor  — the above, plus create / edit / generate
   owner   — the above, plus manage the team (this router)

@@ -31,7 +31,7 @@ from dependencies import get_current_user
 from models.payment_model import Payment
 from models.subscription_model import WebhookEvent
 from models.user_model import User
-from services.entitlements import PLANS, can_purchase, grant_plan
+from services.entitlements import PLANS, PURCHASABLE, can_purchase, grant_plan
 from services import paypal_gateway as gw
 from services.email_service import send_plan_purchase_email
 
@@ -46,7 +46,7 @@ def paypal_config():
         "client_id": settings.PAYPAL_CLIENT_ID if settings.paypal_enabled else "",
         "currency": settings.PAYPAL_CURRENCY,
         "plans": [{"id": k, "name": v["label"], "amount": v["usd_amount"], "period": v["period"]}
-                  for k, v in PLANS.items() if v["amount"] > 0],
+                  for k, v in PURCHASABLE.items()],
     }
 
 
@@ -63,8 +63,8 @@ def create_order(req: OrderRequest, current_user: User = Depends(get_current_use
         raise HTTPException(status_code=409, detail="PayPal is not configured on this server.")
 
     plan_key = (req.plan or "").strip().lower()
-    spec = PLANS.get(plan_key)
-    if not spec or spec["amount"] <= 0:
+    spec = PURCHASABLE.get(plan_key)
+    if not spec:
         raise HTTPException(status_code=400, detail=f"Unknown plan: {req.plan}")
     allowed, why = can_purchase(db, current_user, plan_key)
     if not allowed:
