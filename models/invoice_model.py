@@ -15,8 +15,8 @@ class Invoice(Base):
     history every time something was edited — which is exactly what an invoice exists to
     prevent.
 
-    Linked to a Payment or a Subscription, never both. One-time purchases come from a
-    payment; a renewal comes from the `subscription.charged` webhook.
+    Linked to a Payment (every sale now). `subscription_id` is only set on invoices issued
+    for Razorpay auto-pay renewals before the move to Cashfree.
     """
     __tablename__ = "invoices"
 

@@ -7,7 +7,7 @@ billed, and the taxable value and tax are derived FROM it — never the other wa
 the tax first and add it, and the invoice stops agreeing with the bank statement the moment a
 coupon or a rounding rupee is involved.
 
-**An invoice is issued once.** Razorpay retries webhooks and a customer can double-click a
+**An invoice is issued once.** Payment gateways retry webhooks and a customer can double-click a
 confirm button, so every entry point asks for the invoice belonging to that payment before
 creating one. A second invoice for the same money is not a duplicate row, it is a second
 document with its own number that a customer may act on.
@@ -52,7 +52,7 @@ def split_amount(gross: float) -> dict:
     the document carries a statement that the supplier is not registered.
 
     With a GSTIN, prices on the pricing page are treated as GST-INCLUSIVE, because ₹1,499 is
-    what Razorpay actually charges. Adding tax on top would mean the customer is billed
+    what the gateway actually charges. Adding tax on top would mean the customer is billed
     ₹1,769 for a plan advertised at ₹1,499.
     """
     gross = round(float(gross or 0), 2)
@@ -91,7 +91,7 @@ def _describe(plan: str, period_start, period_end) -> str:
     spec = plan_spec(plan)
     line = f"1x {spec['label']} Plan"
     if spec["period_days"]:
-        line += " — Monthly Subscription"
+        line += {"yearly": " — Yearly plan"}.get(spec.get("period"), " — Monthly plan")
         if period_start and period_end:
             line += (f", {period_start.strftime('%d %b %Y')} to "
                      f"{period_end.strftime('%d %b %Y')}")
@@ -126,30 +126,6 @@ def for_payment(db, payment):
                    coupon_code=payment.coupon_code,
                    issued_at=issued, period_start=issued, period_end=period_end,
                    currency=payment.currency or "INR")
-
-
-def for_subscription_charge(db, subscription, amount: float):
-    """The invoice for one renewal. Keyed on the subscription's paid_count so a webhook
-    delivered twice does not issue a second document for the same cycle."""
-    from models.invoice_model import Invoice
-    from models.user_model import User
-
-    cycle = subscription.paid_count or 1
-    tag = f"cycle:{cycle}"
-    already = (db.query(Invoice)
-                 .filter(Invoice.subscription_id == subscription.id,
-                         Invoice.description.like(f"%{tag}%")).first())
-    if already:
-        return already
-
-    user = db.get(User, subscription.user_id)
-    issued = subscription.current_start or datetime.utcnow()
-    return _create(db, user=user, payment=None, subscription=subscription,
-                   plan=subscription.plan, gross=float(amount or 0), discount=0.0,
-                   coupon_code=None, issued_at=issued,
-                   period_start=subscription.current_start,
-                   period_end=subscription.current_end,
-                   description_suffix=f"  [{tag}]")
 
 
 def _create(db, *, user, payment, subscription, plan, gross, discount, coupon_code,

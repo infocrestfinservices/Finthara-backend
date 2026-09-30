@@ -180,8 +180,9 @@ def list_payments(db: Session = Depends(get_db), status_filter: str | None = Que
         "payments": [{
             "id": p.id, "user_id": u.id, "email": u.email,
             "plan": p.plan, "amount": float(p.amount or 0), "currency": p.currency,
-            "status": p.status, "order_id": p.razorpay_order_id,
-            "payment_id": p.razorpay_payment_id,
+            "status": p.status, "gateway": p.gateway,
+            "order_id": p.cashfree_order_id or p.paypal_order_id or p.razorpay_order_id,
+            "payment_id": p.cashfree_payment_id or p.paypal_capture_id or p.razorpay_payment_id,
             "created_at": p.created_at.isoformat() if p.created_at else None,
             "paid_at": p.paid_at.isoformat() if p.paid_at else None,
         } for p, u in rows],
@@ -595,6 +596,8 @@ def _payment_reference(payment: Payment | None) -> str:
         return "Coupon — no charge"
     if payment.gateway == "paypal":
         return payment.paypal_capture_id or payment.paypal_order_id or "—"
+    if payment.gateway == "cashfree":
+        return payment.cashfree_payment_id or payment.cashfree_order_id or "—"
     return payment.razorpay_payment_id or payment.razorpay_order_id or "—"
 
 
@@ -603,7 +606,7 @@ def _payment_method(payment: Payment | None) -> str:
         return "—"
     if float(payment.amount or 0) == 0 and payment.coupon_code:
         return "Coupon — no charge"
-    return "PayPal" if payment.gateway == "paypal" else "Razorpay"
+    return {"paypal": "PayPal", "cashfree": "Cashfree"}.get(payment.gateway, "Razorpay")
 
 
 @router.get("/invoices")
@@ -625,6 +628,8 @@ def admin_invoices(db: Session = Depends(get_db), q: str | None = None,
         query = query.filter(or_(
             Invoice.invoice_number.ilike(like),
             Invoice.customer_email.ilike(like),
+            Payment.cashfree_payment_id.ilike(like),
+            Payment.cashfree_order_id.ilike(like),
             Payment.razorpay_payment_id.ilike(like),
             Payment.razorpay_order_id.ilike(like),
             Payment.paypal_capture_id.ilike(like),

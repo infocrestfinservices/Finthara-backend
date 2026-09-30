@@ -76,8 +76,6 @@ class Settings(BaseSettings):
         """True when the narrative runs somewhere other than the default DeepSeek client."""
         return bool(self.HEAVY_API_KEY.strip() or self.HEAVY_BASE_URL.strip()
                     or self.HEAVY_MODEL.strip() or self.OPENAI_API_KEY.strip())
-    # Razorpay. The KEY_ID is public (the browser needs it to open the checkout); the
-    # SECRET never leaves the server — it is what proves a payment actually happened.
     # Which deployment this is. Anything other than "production" is treated as a place
     # where it is safe to expose the engine-test harness and the interactive API docs.
     # It defaults to development so a machine with no ENV set behaves as a dev box —
@@ -113,17 +111,23 @@ class Settings(BaseSettings):
     # once payments are meant to actually gate anything.
     UNLOCK_ALL: bool = False
 
-    RAZORPAY_KEY_ID: str = ""
-    RAZORPAY_KEY_SECRET: str = ""
-    # Set in the Razorpay dashboard when the webhook URL is registered. It is NOT the key
-    # secret — a different value, and the only thing that distinguishes a real delivery from
-    # anyone on the internet posting "subscription.charged". Empty means every webhook is
-    # rejected, which is the correct behaviour for a server that cannot tell them apart.
-    RAZORPAY_WEBHOOK_SECRET: str = ""
+    # ── Cashfree (INR checkout) ─────────────────────────────────────────────────
+    # From the environment only — never written here. The APP_ID is the public client id;
+    # the SECRET_KEY never leaves the server: it authenticates every API call AND is the key
+    # Cashfree signs its webhooks with, so it is what proves a payment actually happened.
+    CASHFREE_APP_ID: str = ""
+    CASHFREE_SECRET_KEY: str = ""
+    # "sandbox" or "production". Picks the API host; sandbox keys fail against production
+    # (and vice versa), so a test integration can never silently charge a real card.
+    CASHFREE_ENV: str = "sandbox"
+
+    @property
+    def cashfree_production(self) -> bool:
+        return self.CASHFREE_ENV.strip().lower() == "production"
 
     @property
     def payments_enabled(self) -> bool:
-        return bool(self.RAZORPAY_KEY_ID.strip() and self.RAZORPAY_KEY_SECRET.strip())
+        return bool(self.CASHFREE_APP_ID.strip() and self.CASHFREE_SECRET_KEY.strip())
 
     # ── PayPal ──────────────────────────────────────────────────────────────────
     # The public id the browser SDK loads with — safe to expose, and returned in the
@@ -138,7 +142,7 @@ class Settings(BaseSettings):
     # The webhook's id from the PayPal dashboard (WH-...) — NOT a secret. It is one of the
     # inputs to /v1/notifications/verify-webhook-signature, which is what actually proves a
     # delivery came from PayPal; an empty value here means every webhook is rejected, the same
-    # fail-closed default the Razorpay webhook secret has.
+    # fail-closed default the Cashfree webhook check has.
     PAYPAL_WEBHOOK_ID: str = ""
     PAYPAL_CURRENCY: str = "USD"
     # Shown on PayPal's own approval/review screen and on the buyer's card/bank statement.
@@ -187,5 +191,8 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        # A key in .env this class no longer declares (e.g. the RAZORPAY_* keys retired with
+        # the move to Cashfree) is ignored rather than refusing to start the server.
+        extra = "ignore"
 
 settings = Settings()

@@ -8,8 +8,8 @@ from database import Base
 class Payment(Base):
     """One row per attempt, written when the order is created and updated when it is paid.
 
-    A row exists even for an abandoned checkout, which is deliberate: a payment that
-    Razorpay took but that never reached us has to be findable afterwards, and it can only
+    A row exists even for an abandoned checkout, which is deliberate: a payment that the
+    gateway took but that never reached us has to be findable afterwards, and it can only
     be found against an order we recorded when we asked for it.
     """
     __tablename__ = "payments"
@@ -17,11 +17,11 @@ class Payment(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
-    # "razorpay" | "paypal" — which provider this row belongs to, and therefore which of the
-    # id columns below is populated. Existing rows predate PayPal and default to razorpay.
-    gateway = Column(String, nullable=False, default="razorpay")
+    # "cashfree" | "paypal" — which provider this row belongs to, and therefore which of the
+    # id columns below is populated. "razorpay" rows are history from before Cashfree.
+    gateway = Column(String, nullable=False, default="cashfree")
 
-    plan = Column(String, nullable=False)          # basic | advanced
+    plan = Column(String, nullable=False)          # entrepreneur | consultant_monthly | consultant_yearly
     # In the unit `currency` names — rupees for INR, dollars for USD, not paise/cents.
     amount = Column(Float, nullable=False)
     # Minor units (paise for INR, cents for USD) — what the gateway itself was actually asked
@@ -30,11 +30,14 @@ class Payment(Base):
     amount_paise = Column(Integer, nullable=False)
     currency = Column(String, default="INR")
 
-    # Nullable now that a row can belong to either gateway — a PayPal payment has no Razorpay
-    # order id and vice versa. `unique=True` still holds with many NULLs sitting in the
-    # column: a SQL unique constraint never considers NULL equal to another NULL, so every
-    # PayPal row's NULL razorpay_order_id coexists fine — the constraint only ever fires
-    # when two rows claim the SAME real order id.
+    # Our order id at Cashfree (also what the webhook and the return URL carry), and the id
+    # of the payment that settled it. Nullable because a row belongs to one gateway only;
+    # a unique constraint never treats two NULLs as equal, so that is fine.
+    cashfree_order_id = Column(String, nullable=True, unique=True, index=True)
+    cashfree_payment_id = Column(String, nullable=True, index=True)
+
+    # Legacy — Razorpay rows from before the move to Cashfree. Kept so past payments and
+    # the invoices that point at them still read correctly; nothing new is written here.
     razorpay_order_id = Column(String, nullable=True, unique=True, index=True)
     razorpay_payment_id = Column(String, nullable=True, index=True)
     razorpay_signature = Column(String, nullable=True)

@@ -62,7 +62,7 @@ echo "==> Building the frontend"
 # nothing — so it is read here and the build stops if it is missing.
 cd "$FRONTEND"
 if [ ! -f .env.production ]; then
-  echo "ERROR: $FRONTEND/.env.production is missing (VITE_BACKEND_URL, VITE_RAZORPAY_KEY_ID)"
+  echo "ERROR: $FRONTEND/.env.production is missing (VITE_BACKEND_URL)"
   exit 1
 fi
 grep -q "VITE_BACKEND_URL=https\?://" .env.production || {

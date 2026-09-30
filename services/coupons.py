@@ -2,7 +2,7 @@
 
 The rule the whole module is built around is the same one the payment flow already follows:
 **the browser says which code it wants to use, never what it is worth.** A discount computed
-in the client and sent along would be signed by Razorpay exactly as faithfully as a real one —
+in the client and sent along would be charged by the gateway exactly as faithfully as a real one —
 their signature covers the amount they were asked to charge, not whether that amount was
 correct. So every price here is derived from the coupon row and the plan's own price, and the
 request contributes nothing but a string.
@@ -25,7 +25,7 @@ from services.entitlements import PLANS, PURCHASABLE
 
 logger = logging.getLogger("coupons")
 
-# Razorpay will not create an order below one rupee. A code that takes the price to zero is a
+# Cashfree will not create an order below one rupee. A code that takes the price to zero is a
 # legitimate thing to want (a free month for a partner), so it is handled by granting the plan
 # outright instead of sending a ₹0 order that would be rejected.
 MIN_CHARGEABLE = 1.0

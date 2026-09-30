@@ -75,7 +75,11 @@ ensure_columns("payments", {
     "gateway": "VARCHAR NOT NULL DEFAULT 'razorpay'",
     "paypal_order_id": "VARCHAR",
     "paypal_capture_id": "VARCHAR",
+    "cashfree_order_id": "VARCHAR",
+    "cashfree_payment_id": "VARCHAR",
 })
+ensure_index("ix_payments_cashfree_order_id", "payments", "cashfree_order_id", unique=True)
+ensure_index("ix_payments_cashfree_payment_id", "payments", "cashfree_payment_id")
 # razorpay_order_id was NOT NULL when every payment was a Razorpay payment; a PayPal row has
 # no Razorpay order at all. See models/payment_model.py.
 ensure_nullable("payments", "razorpay_order_id")

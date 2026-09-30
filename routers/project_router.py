@@ -10,6 +10,7 @@ from schemas.report_schema import ReportCreate, ReportResponse
 from dependencies import (get_current_user, get_owned_project, require_project_editor,
                           get_strictly_owned_project)
 from services.roles import my_company_ids
+from services.entitlements import claim_generation
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -74,8 +75,17 @@ def save_report(
     data: ReportCreate,
     project: Project = Depends(require_project_editor),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     existing = db.query(Report).filter(Report.project_id == project.id).first()
+    if not existing:
+        # Editing a report that already exists is free. CREATING one here is a new report,
+        # and must pass the same plan gate as generating one — otherwise this route made a
+        # report row for free, and the project's next generation then counted as a (free)
+        # regeneration. The project OWNER's plan pays, as in generation_router.
+        allowed, why = claim_generation(db, project.user or current_user, project)
+        if not allowed:
+            raise HTTPException(status_code=402, detail=why)
     if existing:
         existing.report_content = data.report_content
         existing.report_format = data.report_format

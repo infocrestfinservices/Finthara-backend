@@ -1,26 +1,26 @@
-"""Razorpay checkout for the pricing plans (Entrepreneur one-time, Consultant & CA monthly/yearly).
+"""Cashfree checkout for the pricing plans (Entrepreneur one-time, Consultant & CA monthly /
+yearly — all sold as single payments; nothing here renews automatically).
 
 The one rule everything here is built around: **the price is decided by the server**. The
-browser says which plan it wants, never what it costs. If the amount came from the client,
-anyone could open the console and buy the ₹4,999 plan for ₹1 — and the payment would verify
-perfectly, because Razorpay only signs what it was asked to charge.
+browser says which plan it wants, never what it costs. The amount comes from
+services/entitlements.py (less any coupon, also computed here), and a payment only counts if
+Cashfree reports the order PAID for exactly that amount in INR.
 
-The flow is the standard three steps:
-  1. POST /payments/order   — we create a Razorpay order for the plan's server-side price
-                              and record it as "created"
-  2. the browser opens Razorpay's checkout with that order
-  3. POST /payments/verify  — Razorpay hands back an order_id, payment_id and signature; we
-                              recompute the signature with our SECRET and only then mark the
-                              payment paid and move the user onto the plan.
-
-Step 3 is the whole security of it. A client that simply POSTs "I paid" gets rejected,
-because it cannot produce a signature without the key secret, which never leaves this file's
-side of the wire.
+The flow:
+  1. POST /payments/order   — we record a Payment row, create a Cashfree order for the
+                              server-side price and return its payment_session_id
+  2. the browser opens cashfree.js checkout with that session
+  3. POST /payments/verify  — we ASK CASHFREE what happened to the order (never trusting the
+                              browser's say-so) and only on PAID + matching amount mark the
+                              payment paid and grant the plan.
+  4. POST /payments/webhook — Cashfree's server-to-server notice, signature-checked; the
+                              safety net for a browser that closed before step 3. It runs the
+                              same finalisation, which is safe to run twice.
 """
 import hashlib
-import hmac
 import json
 import logging
+import re
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -31,12 +31,11 @@ from config import settings
 from database import get_db
 from dependencies import get_current_user
 from models.payment_model import Payment
-from models.subscription_model import Subscription
+from models.subscription_model import WebhookEvent
 from models.user_model import User
-from services.entitlements import (PLANS, PURCHASABLE, can_purchase, expiry_for,
-                                   grant_plan)
+from services.entitlements import PURCHASABLE, can_purchase, grant_plan
+from services import cashfree_gateway as cf
 from services import coupons as coupon_service
-from services import subscriptions as subs
 from services.email_service import send_plan_purchase_email
 
 logger = logging.getLogger(__name__)
@@ -59,47 +58,69 @@ def _send_purchase_email(user: User, payment: Payment, invoice) -> None:
         logger.exception("payments: purchase email could not be sent for payment %s",
                          payment.id)
 
+
+def _issue_invoice_and_email(db: Session, user: User, payment: Payment) -> None:
+    """The invoice is issued only once the money is real — never at order time, or an
+    abandoned checkout would leave a numbered document for a sale that never happened."""
+    invoice = None
+    try:
+        from services import invoices as invoice_service
+        invoice = invoice_service.for_payment(db, payment)
+    except Exception:
+        # The customer has paid and their plan is granted; a failed invoice must not turn
+        # that into an error on their screen. It is logged and can be re-issued.
+        logger.exception("payments: invoice could not be issued for payment %s", payment.id)
+    _send_purchase_email(user, payment, invoice)
+
+
 # The price list lives on the SERVER, not in the frontend — the pricing page may show
-# whatever it likes; what gets charged is this. It is imported rather than restated because
-# the same table also decides what a plan ALLOWS (services/entitlements.py). Two copies of
-# it would drift, and the first sign of that would be a customer paying for a plan and
-# receiving a different one's limits.
+# whatever it likes; what gets charged is this. Imported from entitlements rather than
+# restated, because the same table decides what a plan ALLOWS.
 PLANS = {k: {"name": v["label"], "amount": v["amount"], "period": v["period"]}
          for k, v in PURCHASABLE.items()}
 
 
 class OrderRequest(BaseModel):
     plan: str
-    # A code, and nothing else. What it is worth is decided here, against the coupon row —
-    # a discount sent from the browser would be signed by Razorpay just as faithfully as a
-    # real one, because their signature covers the amount they were asked to charge, not
-    # whether that amount was right.
+    # A code, and nothing else. What it is worth is decided here, against the coupon row.
     coupon: str | None = None
+    # Cashfree requires a phone number. Sent only when the account has none on file; it is
+    # then saved to the profile so it is not asked for again.
+    phone: str | None = None
 
 
 class VerifyRequest(BaseModel):
-    razorpay_order_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
+    order_id: str
 
 
-def _client():
-    if not settings.payments_enabled:
-        # Not 503: App Platform's edge substitutes its own generic error page for a 503
-        # from the app instead of passing the body through, which is exactly the message
-        # this exists to deliver. 409 reaches the browser untouched.
-        raise HTTPException(status_code=409,
-                            detail="Payments are not configured on this server.")
-    import razorpay
-    return razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+def _clean_phone(raw: str | None) -> str | None:
+    """A 10-digit Indian mobile number, or None. Accepts +91 / 0 prefixes and spacing."""
+    digits = re.sub(r"\D", "", raw or "")
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    elif len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
+    return digits if re.fullmatch(r"[6-9]\d{9}", digits) else None
+
+
+def _return_url(order_id: str) -> str | None:
+    """Where Cashfree sends the browser back to for payment methods that leave the page
+    (some netbanking / UPI flows). The pricing page picks up ?cf_order= and verifies it.
+    Production Cashfree accepts only https, so a non-https FRONTEND_URL there sends none —
+    the modal checkout and the webhook still complete the payment without it."""
+    base = (settings.FRONTEND_URL or "").rstrip("/")
+    if not base or (settings.cashfree_production and not base.startswith("https://")):
+        return None
+    return f"{base}/pricing?cf_order={order_id}"
 
 
 @router.get("/config")
 def payment_config():
-    """What the checkout needs before it can open. The SECRET is never part of this."""
+    """What the checkout needs before it can open. The secret key is never part of this."""
     return {
-        "enabled": settings.payments_enabled,
-        "key_id": settings.RAZORPAY_KEY_ID if settings.payments_enabled else "",
+        "enabled": cf.enabled(),
+        "gateway": "cashfree",
+        "mode": cf.mode(),
         "currency": "INR",
         "plans": [{"id": k, **v} for k, v in PLANS.items()],
     }
@@ -108,15 +129,14 @@ def payment_config():
 @router.post("/order")
 def create_order(req: OrderRequest, current_user: User = Depends(get_current_user),
                  db: Session = Depends(get_db)):
-    """Create a Razorpay order for a plan, at the price this server holds for it."""
-    plan = PLANS.get((req.plan or "").strip().lower())
+    """Create a Cashfree order for a plan, at the price this server holds for it."""
+    plan_key = (req.plan or "").strip().lower()
+    plan = PLANS.get(plan_key)
     if not plan:
         raise HTTPException(status_code=400, detail=f"Unknown plan: {req.plan}")
-    # Checked here rather than after payment: refusing a sale costs nothing, whereas taking
-    # money for something that leaves someone with LESS than they had is the worst outcome a
-    # checkout can produce — and it is exactly what happened on the first real payment, when
-    # an account on Professional bought Starter and dropped to 3 reports and PDF only.
-    allowed, why = can_purchase(db, current_user, req.plan)
+    # Refused BEFORE any money moves: taking money for something that leaves someone with
+    # LESS than they had is the worst outcome a checkout can produce.
+    allowed, why = can_purchase(db, current_user, plan_key)
     if not allowed:
         raise HTTPException(status_code=409, detail=why)
 
@@ -126,152 +146,237 @@ def create_order(req: OrderRequest, current_user: User = Depends(get_current_use
     if (req.coupon or "").strip():
         try:
             coupon, discount, amount = coupon_service.validate(
-                db, req.coupon, req.plan, current_user)
+                db, req.coupon, plan_key, current_user)
         except coupon_service.CouponError as e:
             raise HTTPException(status_code=400, detail=str(e))
         if amount < coupon_service.MIN_CHARGEABLE:
-            # The code covers the whole price. Razorpay will not create an order under a
+            # The code covers the whole price. A gateway will not create an order under a
             # rupee, and asking a customer to pay ₹1 they were told they would not owe is
             # worse than granting it. Recorded as a fully-discounted payment so it appears in
             # the admin panel and in the coupon's redemption count like any other use.
-            paid = Payment(user_id=current_user.id, plan=req.plan.lower(),
+            paid = Payment(user_id=current_user.id, gateway="cashfree", plan=plan_key,
                            amount=0.0, amount_paise=0, currency="INR",
-                           razorpay_order_id=f"free-{coupon.code}-{current_user.id}-"
+                           cashfree_order_id=f"free-{coupon.code}-{current_user.id}-"
                                              f"{int(datetime.utcnow().timestamp())}",
                            coupon_code=coupon.code, discount=discount,
                            status="paid", paid_at=datetime.utcnow())
             db.add(paid)
-            grant_plan(current_user, req.plan.lower())
+            grant_plan(current_user, plan_key)
             db.commit()
-            coupon_service.redeem(db, coupon, current_user, req.plan.lower(),
+            coupon_service.redeem(db, coupon, current_user, plan_key,
                                   float(plan["amount"]), discount, 0.0, paid.id)
             logger.info("payments: %s covered the full price of %s for user %s",
-                        coupon.code, req.plan, current_user.id)
-            # A ₹0 sale is still a sale — the customer needs a document for it same as a paid
-            # one, and the coupon-covered branch was the one place that never issued one.
-            invoice = None
-            try:
-                from services import invoices as invoice_service
-                invoice = invoice_service.for_payment(db, paid)
-            except Exception:
-                logger.exception("payments: invoice could not be issued for payment %s",
-                                 paid.id)
-            _send_purchase_email(current_user, paid, invoice)
-            return {"free": True, "plan": {"id": req.plan.lower(), **plan},
+                        coupon.code, plan_key, current_user.id)
+            _issue_invoice_and_email(db, current_user, paid)
+            return {"free": True, "plan": {"id": plan_key, **plan},
                     "discount": discount, "amount": 0,
                     "message": f"{coupon.code} covers the full price — your plan is active."}
 
-    paise = int(round(amount * 100))               # Razorpay bills in paise, always
+    if not cf.enabled():
+        # Not 503: App Platform's edge replaces a 503's body with its own error page.
+        raise HTTPException(status_code=409, detail="Payments are not configured on this server.")
+
+    phone = _clean_phone(current_user.phone) or _clean_phone(req.phone)
+    if not phone:
+        # The frontend shows a phone field on exactly this answer and sends the order again.
+        raise HTTPException(status_code=400, detail={
+            "message": "Please enter a 10-digit mobile number to continue to payment.",
+            "phone_required": True})
+    if not _clean_phone(current_user.phone):
+        current_user.phone = phone
+
+    # Row written BEFORE Cashfree is called, so an abandoned or failed attempt is still
+    # findable; its id makes our order id unique.
+    payment = Payment(user_id=current_user.id, gateway="cashfree", plan=plan_key,
+                      amount=amount, amount_paise=int(round(amount * 100)), currency="INR",
+                      coupon_code=(coupon.code if coupon else None), discount=discount,
+                      status="created")
+    db.add(payment)
+    db.commit()
+    db.refresh(payment)
+    order_id = f"fin_{payment.id}_{int(datetime.utcnow().timestamp())}"
+    payment.cashfree_order_id = order_id
+    db.commit()
+
     try:
-        order = _client().order.create({
-            "amount": paise,
-            "currency": "INR",
-            "receipt": f"u{current_user.id}-{plan['name'].lower()}",
-            "notes": {"user_id": str(current_user.id), "plan": req.plan},
-        }, timeout=15)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("payments: could not create an order for user %s", current_user.id)
+        order = cf.create_order(
+            order_id=order_id, amount=amount,
+            customer_id=f"user_{current_user.id}",
+            customer_email=current_user.email, customer_phone=phone,
+            customer_name=current_user.full_name or "",
+            return_url=_return_url(order_id), note=plan["name"])
+    except cf.CashfreeError as e:
+        payment.status = "failed"
+        db.commit()
         raise HTTPException(status_code=409, detail=f"Could not start the payment: {e}")
 
-    db.add(Payment(user_id=current_user.id, plan=req.plan.lower(),
-                   amount=amount, amount_paise=paise, currency="INR",
-                   razorpay_order_id=order["id"],
-                   coupon_code=(coupon.code if coupon else None), discount=discount,
-                   status="created"))
-    db.commit()
-    logger.info("payments: order %s created for user %s (%s, INR %s)",
-                order["id"], current_user.id, req.plan, plan["amount"])
+    logger.info("payments: cashfree order %s created for user %s (%s, INR %s)",
+                order_id, current_user.id, plan_key, amount)
     return {
-        "order_id": order["id"],
-        "amount": paise,
+        "order_id": order_id,
+        "payment_session_id": order["payment_session_id"],
+        "mode": cf.mode(),
+        "amount": amount,
         "currency": "INR",
-        "key_id": settings.RAZORPAY_KEY_ID,
-        "plan": {"id": req.plan.lower(), **plan},
+        "plan": {"id": plan_key, **plan},
         "list_amount": float(plan["amount"]),
         "discount": discount,
         "coupon": (coupon.code if coupon else None),
-        "prefill": {"name": current_user.full_name or "", "email": current_user.email},
     }
+
+
+def _finalize(db: Session, payment: Payment) -> str:
+    """Ask Cashfree what happened to this payment's order and act on it. Returns "paid",
+    "already_paid", "pending" or "failed".
+
+    The caller holds the row lock (SELECT ... FOR UPDATE), so the browser's verify call and
+    the webhook cannot both grant the same payment; whichever runs second sees "paid".
+    """
+    if payment.status == "paid":
+        return "already_paid"
+    order_id = payment.cashfree_order_id
+    try:
+        order = cf.fetch_order(order_id)
+    except cf.CashfreeError:
+        return "pending"                    # could not ask — do not guess either way
+
+    status = order["status"]
+    if status in ("EXPIRED", "TERMINATED", "TERMINATION_REQUESTED"):
+        payment.status = "failed"
+        db.commit()
+        return "failed"
+    if status != "PAID":
+        return "pending"                    # ACTIVE: not paid (yet) — a retry may still pay
+
+    expected = round(float(payment.amount or 0), 2)
+    if abs(order["amount"] - expected) > 0.009 or order["currency"] != "INR":
+        # Never seen in normal operation — a defence against a tampered order or a bug. A
+        # plan is never granted for less than its price.
+        logger.error("payments: order %s is PAID for %s %s but %s INR was expected — "
+                     "refusing to activate", order_id, order["amount"], order["currency"],
+                     expected)
+        payment.status = "failed"
+        db.commit()
+        return "failed"
+
+    try:
+        settled = cf.successful_payment(order_id)
+    except cf.CashfreeError:
+        settled = None
+    user = payment.user
+    payment.cashfree_payment_id = (settled or {}).get("cf_payment_id") or None
+    payment.status = "paid"
+    payment.paid_at = datetime.utcnow()
+    # The coupon is consumed HERE, not when the order was created — an abandoned checkout
+    # must not use up a limited code. Limits are re-checked because the last use may have
+    # been taken by someone else in between.
+    if payment.coupon_code:
+        try:
+            c, disc, final = coupon_service.validate(db, payment.coupon_code, payment.plan, user)
+            coupon_service.redeem(db, c, user, payment.plan, final + disc, disc, final,
+                                  payment.id)
+        except coupon_service.CouponError as e:
+            # The money is taken and the plan is granted regardless; logged so an
+            # over-redeemed code is visible rather than silent.
+            logger.warning("payments: %s could not be redeemed for payment %s: %s",
+                           payment.coupon_code, payment.id, e)
+    # grant_plan EXTENDS what is left rather than resetting it, and a top-up only adds a
+    # report credit — see services/entitlements.py.
+    grant_plan(user, payment.plan)
+    db.commit()
+    _issue_invoice_and_email(db, user, payment)
+    logger.info("payments: order %s PAID by user %s — plan is now %s (expires %s)",
+                order_id, user.id, user.plan, user.plan_expires_at or "never")
+    return "paid"
 
 
 @router.post("/verify")
 def verify_payment(req: VerifyRequest, current_user: User = Depends(get_current_user),
                    db: Session = Depends(get_db)):
-    """Check Razorpay's signature, then record the payment and move the user's plan."""
-    if not settings.payments_enabled:
+    """Called by the browser once the Cashfree checkout closes (or on the return URL).
+    Nothing the browser says is trusted: the order's status is fetched from Cashfree."""
+    if not cf.enabled():
         raise HTTPException(status_code=409, detail="Payments are not configured.")
-
-    payment = db.query(Payment).filter(
-        Payment.razorpay_order_id == req.razorpay_order_id).first()
-    if not payment:
+    payment = (db.query(Payment)
+                 .filter(Payment.cashfree_order_id == req.order_id)
+                 .with_for_update().first())
+    if not payment or payment.user_id != current_user.id:
+        # 404 rather than 403 so this cannot confirm that another user's order exists.
         raise HTTPException(status_code=404, detail="That order was not found.")
-    if payment.user_id != current_user.id:
-        # The order belongs to someone else. 404 rather than 403 so this cannot be used to
-        # confirm that another user's order exists.
-        raise HTTPException(status_code=404, detail="That order was not found.")
-    if payment.status == "paid":
-        return {"status": "paid", "plan": payment.plan, "already": True}
 
-    # HMAC-SHA256 of "<order_id>|<payment_id>" with the key secret. Razorpay computes the
-    # same thing on their side; if ours does not match, the callback did not come from them.
-    expected = hmac.new(
-        settings.RAZORPAY_KEY_SECRET.encode(),
-        f"{req.razorpay_order_id}|{req.razorpay_payment_id}".encode(),
-        hashlib.sha256,
-    ).hexdigest()
-    if not hmac.compare_digest(expected, req.razorpay_signature or ""):
-        payment.status = "failed"
-        db.commit()
-        logger.warning("payments: signature mismatch on order %s (user %s)",
-                       req.razorpay_order_id, current_user.id)
-        raise HTTPException(status_code=400, detail="Payment could not be verified.")
+    outcome = _finalize(db, payment)
+    if outcome in ("paid", "already_paid"):
+        db.refresh(current_user)
+        return {"status": "paid", "plan": payment.plan, "amount": payment.amount,
+                "already": outcome == "already_paid",
+                "payment_id": payment.cashfree_payment_id,
+                "expires_at": (current_user.plan_expires_at.isoformat()
+                               if current_user.plan_expires_at else None)}
+    if outcome == "pending":
+        return {"status": "pending", "plan": payment.plan}
+    return {"status": "failed", "plan": payment.plan}
 
-    payment.razorpay_payment_id = req.razorpay_payment_id
-    payment.razorpay_signature = req.razorpay_signature
-    payment.status = "paid"
-    # The coupon is consumed HERE, not when the order was created. An abandoned checkout must
-    # not use up a limited code, or a few people opening and closing the window would exhaust
-    # a code nobody actually redeemed. The limits are re-checked because the last use may have
-    # been taken by someone else in between.
-    if payment.coupon_code:
-        try:
-            c, disc, final = coupon_service.validate(
-                db, payment.coupon_code, payment.plan, current_user)
-            coupon_service.redeem(db, c, current_user, payment.plan,
-                                  final + disc, disc, final, payment.id)
-        except coupon_service.CouponError as e:
-            # The money is already taken and the plan is granted regardless — refusing the
-            # customer their plan over a coupon counter would be the wrong way round. It is
-            # logged so an over-redeemed code is visible rather than silent.
-            logger.warning("payments: %s could not be redeemed for payment %s: %s",
-                           payment.coupon_code, payment.id, e)
-    payment.paid_at = datetime.utcnow()
-    # grant_plan, not a bare assignment: buying a month EXTENDS whatever is left rather than
-    # resetting to "30 days from now", which threw away time a customer had already paid for.
-    grant_plan(current_user, payment.plan)
-    db.commit()
-    # The invoice is issued here, after the signature has verified and the money is real.
-    # Never at order time: an abandoned checkout would leave a numbered document for a
-    # payment that never happened, and the series is meant to be a record of actual sales.
-    invoice = None
+
+@router.post("/webhook")
+async def cashfree_webhook(request: Request, db: Session = Depends(get_db)):
+    """Cashfree's delivery, independent of whatever the browser did.
+
+    Unauthenticated by nature — the signature IS the authentication, checked against the RAW
+    body. A bad or missing signature is a 400. Every genuine delivery gets a 2xx once it is
+    recorded (Cashfree retries anything else), and a repeat of one already recorded is
+    acknowledged and ignored.
+    """
+    body = await request.body()
+    signature = request.headers.get("x-webhook-signature", "")
+    timestamp = request.headers.get("x-webhook-timestamp", "")
+    if not cf.verify_webhook(body, signature, timestamp):
+        logger.warning("payments: cashfree webhook rejected — bad or missing signature")
+        raise HTTPException(status_code=400, detail="Invalid signature.")
     try:
-        from services import invoices as invoice_service
-        invoice = invoice_service.for_payment(db, payment)
-    except Exception:
-        # The customer has paid and their plan is granted; a failed invoice must not turn
-        # that into an error on their screen. It is logged and can be re-issued.
-        logger.exception("payments: invoice could not be issued for payment %s", payment.id)
-    _send_purchase_email(current_user, payment, invoice)
+        payload = json.loads(body.decode("utf-8"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Body is not JSON.")
 
-    logger.info("payments: order %s PAID by user %s — plan is now %s (expires %s)",
-                req.razorpay_order_id, current_user.id, payment.plan,
-                current_user.plan_expires_at or "never")
-    return {"status": "paid", "plan": payment.plan, "amount": payment.amount,
-            "payment_id": payment.razorpay_payment_id,
-            "expires_at": (current_user.plan_expires_at.isoformat()
-                           if current_user.plan_expires_at else None)}
+    event_type = str(payload.get("type") or "")
+    data = payload.get("data") or {}
+    order_id = str((data.get("order") or {}).get("order_id") or "")
+    cf_payment_id = str((data.get("payment") or {}).get("cf_payment_id") or "")
+    pay_status = str((data.get("payment") or {}).get("payment_status") or "")
+    # Cashfree sends no event id; a redelivery repeats the same event for the same payment,
+    # so that combination identifies it.
+    event_id = "cf_" + hashlib.sha256(
+        f"{event_type}|{order_id}|{cf_payment_id}|{pay_status}".encode()).hexdigest()[:40]
+
+    row = db.query(WebhookEvent).filter(WebhookEvent.gateway == "cashfree",
+                                        WebhookEvent.event_id == event_id).first()
+    if row and row.handled and "-> pending" not in (row.note or ""):
+        return {"ok": True, "processed": False, "note": "duplicate delivery, ignored"}
+    if not row:
+        # A delivery that last time could not reach a conclusion (Cashfree's API was
+        # unreachable, so "pending") is processed again rather than ignored.
+        row = WebhookEvent(gateway="cashfree", event_id=event_id, event=event_type,
+                           payload=body.decode("utf-8", "replace")[:20000])
+        db.add(row)
+        db.commit()
+
+    try:
+        if event_type == "PAYMENT_SUCCESS_WEBHOOK" and order_id:
+            payment = (db.query(Payment)
+                         .filter(Payment.cashfree_order_id == order_id)
+                         .with_for_update().first())
+            note = (f"{event_type}: payment {payment.id} -> {_finalize(db, payment)}"
+                    if payment else f"{event_type}: no payment for order {order_id}")
+        else:
+            # A failed or abandoned ATTEMPT does not fail the order — the customer can retry
+            # in the same checkout. Recorded only.
+            note = f"{event_type or 'unknown'}: order {order_id or '?'} recorded only"
+        row.handled, row.note = True, note[:500]
+    except Exception as exc:
+        row.handled, row.note = False, f"{type(exc).__name__}: {exc}"[:500]
+        db.commit()
+        raise
+    db.commit()
+    return {"ok": True, "processed": True, "note": note}
 
 
 class CouponPreview(BaseModel):
@@ -312,160 +417,14 @@ def my_payments(current_user: User = Depends(get_current_user),
             .filter(Payment.user_id == current_user.id, Payment.status == "paid")
             .order_by(Payment.paid_at.desc()).all())
     from services.entitlements import entitlements
-    # Whether auto-pay is running, and when it next bills. Without this the billing screen
-    # can only say "you are on Professional until the 10th" and not whether that date is a
-    # renewal or the end of everything — which is the one thing a customer wants to know.
-    live = (db.query(Subscription)
-              .filter(Subscription.user_id == current_user.id)
-              .order_by(Subscription.id.desc()).first())
     return {
         **entitlements(db, current_user),
-        "subscription": ({
-            "status": live.status,
-            "plan": live.plan,
-            "auto_pay": live.status in subs.LIVE_STATES and not live.cancel_at_cycle_end,
-            "cancel_at_cycle_end": bool(live.cancel_at_cycle_end),
-            "next_charge_at": live.charge_at.isoformat() if live.charge_at else None,
-            "current_end": live.current_end.isoformat() if live.current_end else None,
-            "paid_count": live.paid_count or 0,
-        } if live else None),
+        # Nothing renews automatically any more; kept so older clients reading it still work.
+        "subscription": None,
         "payments": [{"plan": p.plan, "amount": p.amount, "currency": p.currency,
-                      "payment_id": p.razorpay_payment_id,
+                      "gateway": p.gateway,
+                      "payment_id": (p.cashfree_payment_id or p.paypal_capture_id
+                                     or p.razorpay_payment_id),
                       "paid_at": p.paid_at.isoformat() if p.paid_at else None}
                      for p in rows],
     }
-
-
-# ── auto-pay (Razorpay Subscriptions) ──────────────────────────────────────────
-# The Orders flow above charges once. Professional and Enterprise are sold PER MONTH, and
-# charging once for them granted the plan for ever. These three routes are the recurring
-# path: take a mandate, let Razorpay debit it each cycle, and move the expiry to whatever
-# date Razorpay says the customer is paid up to.
-
-
-class SubscribeRequest(BaseModel):
-    plan: str
-
-
-@router.post("/subscribe")
-def start_subscription(req: SubscribeRequest, current_user: User = Depends(get_current_user),
-                       db: Session = Depends(get_db)):
-    """Begin auto-pay for a monthly or yearly plan. Returns what the checkout needs."""
-    plan = (req.plan or "").strip().lower()
-    # PLANS here is only what is for sale, so a legacy plan cannot start a NEW mandate.
-    if plan not in subs.RECURRING or plan not in PLANS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{req.plan} is not a recurring plan.")
-    if not subs.enabled():
-        raise HTTPException(status_code=409, detail="Payments are not configured.")
-    allowed, why = can_purchase(db, current_user, plan)
-    if not allowed:
-        raise HTTPException(status_code=409, detail=why)
-
-    # One live mandate per user. Two would debit the card twice a month, and the second would
-    # look exactly like the first in the dashboard.
-    live = (db.query(Subscription)
-              .filter(Subscription.user_id == current_user.id,
-                      Subscription.status.in_(tuple(subs.LIVE_STATES)))
-              .first())
-    if live:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Auto-pay is already active on the {live.plan} plan. Cancel it before "
-                   f"starting another.")
-
-    try:
-        sub = subs.create_subscription(current_user, plan)
-    except Exception:
-        # A 401 from the plans/subscriptions API means the Razorpay ACCOUNT does not have
-        # Subscriptions enabled — the keys are fine, the feature is simply not switched on,
-        # and activation is a request on the merchant's side that takes days.
-        #
-        # Refusing the sale for those days is the wrong answer: it makes the monthly plans
-        # unbuyable, which is worse than the problem auto-pay was added to fix. The caller is
-        # told to fall back to the ONE-TIME flow, which still charges the right amount and
-        # still grants exactly 30 days (entitlements.expiry_for decides that, not this
-        # endpoint) — the customer simply has to renew by hand until auto-pay is live.
-        logger.exception("payments: could not create a subscription for user %s", current_user.id)
-        # Not 503 — see the note on _client() above: App Platform's edge swallows the body
-        # of a 503 from the app and shows its own generic error page instead, which is
-        # exactly the auto_pay_unavailable message the frontend's fallback depends on.
-        raise HTTPException(
-            status_code=409,
-            detail={"message": "Auto-pay is not available yet on this payment account.",
-                    "auto_pay_unavailable": True,
-                    "fallback": "one_time"})
-
-    row = Subscription(user_id=current_user.id, plan=plan,
-                       razorpay_plan_id=sub.get("plan_id") or "",
-                       razorpay_subscription_id=sub["id"],
-                       status=sub.get("status") or "created")
-    db.add(row)
-    db.commit()
-    return {
-        "subscription_id": sub["id"],
-        "key_id": settings.RAZORPAY_KEY_ID,
-        "plan": {"id": plan, **PLANS[plan]},
-        "short_url": sub.get("short_url"),
-        "prefill": {"name": current_user.full_name or "", "email": current_user.email},
-    }
-
-
-@router.post("/subscription/cancel")
-def cancel_subscription(at_cycle_end: bool = True,
-                        current_user: User = Depends(get_current_user),
-                        db: Session = Depends(get_db)):
-    """Stop auto-pay. By default the customer keeps the plan until the period they have
-    already paid for ends — cancelling access the moment someone cancels the renewal is
-    taking back what they bought."""
-    row = (db.query(Subscription)
-             .filter(Subscription.user_id == current_user.id,
-                     Subscription.status.in_(tuple(subs.LIVE_STATES)))
-             .order_by(Subscription.id.desc()).first())
-    if not row:
-        raise HTTPException(status_code=404, detail="There is no active auto-pay to cancel.")
-    try:
-        subs.client().subscription.cancel(row.razorpay_subscription_id,
-                                          {"cancel_at_cycle_end": 1 if at_cycle_end else 0},
-                                          timeout=15)
-    except Exception:
-        logger.exception("payments: cancel failed for %s", row.razorpay_subscription_id)
-        raise HTTPException(status_code=409, detail="Could not cancel with the payment provider.")
-
-    row.cancel_at_cycle_end = bool(at_cycle_end)
-    if not at_cycle_end:
-        row.status, row.cancelled_at = "cancelled", datetime.utcnow()
-    db.commit()
-    logger.info("payments: user %s cancelled %s (at_cycle_end=%s)",
-                current_user.id, row.razorpay_subscription_id, at_cycle_end)
-    return {"status": row.status, "cancel_at_cycle_end": row.cancel_at_cycle_end,
-            "access_until": row.current_end.isoformat() if row.current_end else None}
-
-
-@router.post("/webhook")
-async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
-    """Where every recurring charge is actually learned about.
-
-    Unauthenticated by nature — Razorpay calls it, not a logged-in browser — so the signature
-    IS the authentication. The raw body is hashed, not the re-serialised JSON, because
-    re-serialising changes key order and the signature would never match.
-
-    Always answers 2xx once the delivery is recorded, including for events we do not act on.
-    A non-2xx makes Razorpay retry, and retrying an event that will never be handled just
-    fills the queue.
-    """
-    body = await request.body()
-    signature = request.headers.get("x-razorpay-signature", "")
-    if not subs.verify_webhook(body, signature):
-        logger.warning("payments: webhook rejected — bad or missing signature")
-        raise HTTPException(status_code=400, detail="Invalid signature.")
-
-    try:
-        payload = json.loads(body.decode("utf-8"))
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Body is not JSON.")
-
-    event_id = request.headers.get("x-razorpay-event-id", "")
-    processed, note = subs.record_and_apply(db, event_id, body, payload)
-    return {"ok": True, "processed": processed, "note": note}

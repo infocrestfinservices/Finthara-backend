@@ -6,7 +6,8 @@ from database import Base
 
 
 class Subscription(Base):
-    """A recurring mandate at Razorpay, mirrored here.
+    """LEGACY — a recurring mandate at Razorpay, mirrored here. Nothing creates these any
+    more (Cashfree payments are single payments); the table is kept for the history it holds.
 
     A Payment is one charge that either happened or did not. A subscription is a LIFECYCLE —
     created, authenticated, active, charged again next month, halted when a card fails,
