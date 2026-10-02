@@ -178,7 +178,8 @@ def _create(db, *, user, payment, subscription, plan, gross, discount, coupon_co
             tax_note=tax_note,
             supplier_name=settings.COMPANY_NAME,
             supplier_address=settings.COMPANY_ADDRESS or None,
-            supplier_email=settings.COMPANY_EMAIL or None,
+            # No email on the invoice itself (the business's choice); support is on the site.
+            supplier_email=None,
             supplier_gstin=(settings.COMPANY_GSTIN or None),
             plan=plan,
             description=_describe(plan, period_start, period_end) + description_suffix,
