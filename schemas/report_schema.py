@@ -15,6 +15,9 @@ class ReportResponse(BaseModel):
     financial_format: Optional[str] = None
     status: Optional[str] = None
     created_at: datetime
+    # Whether the written (Word) report has been generated — the UI offers "Create Word
+    # report" until it has.
+    word_report: bool = False
 
     class Config:
         from_attributes = True

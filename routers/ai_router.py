@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from services.claude_service import invoke_llm
-from services.entitlements import may_generate
+from services.entitlements import may_generate, may_regenerate
 from models.user_model import User
 from models.project_model import Project
 from database import get_db
@@ -51,6 +51,16 @@ def invoke(request: LLMRequest, current_user: User = Depends(get_current_user),
         project_id = request.project_id if owned else None
     else:
         project_id = None
+
+    if project_id is not None:
+        # A call tied to a project that already has a report rewrites that report — a
+        # regeneration. Refused outright (not answered with the chat's upgrade text, which
+        # the caller would otherwise save as the report's content).
+        from models.report_model import Report
+        if db.query(Report.id).filter(Report.project_id == project_id).first():
+            ok, why = may_regenerate(current_user, adds_word_only=False)
+            if not ok:
+                raise HTTPException(status_code=402, detail=why)
 
     allowed, _ = may_generate(db, current_user, project_id)
     if not allowed:

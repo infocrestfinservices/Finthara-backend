@@ -206,6 +206,7 @@ def entitlements(db, user) -> dict:
         "expires_at": (getattr(user, "plan_expires_at", None).isoformat()
                        if getattr(user, "plan_expires_at", None) else None),
         "report_credits": left_credits,
+        "can_regenerate": bool(settings.UNLOCK_ALL) or plan not in NO_REGEN_PLANS,
         "cycle_ends_at": None,
         "exports": sorted(spec["exports"]),
     }
@@ -301,6 +302,26 @@ def claim_generation(db, user, project) -> tuple[bool, str]:
     logger.info("entitlements: user %s spent a report credit on project %s (%s left)",
                 locked.id, project.id, locked.report_credits)
     return True, ""
+
+
+# Plans that pay for a report ONCE. Their only run after the first is the one that adds
+# the Word document to a report that was built workbook-first (generation defaults to
+# excel_only) — the same report, unchanged inputs. Anything else is a regeneration, which
+# Consultant & CA includes and these do not.
+NO_REGEN_PLANS = {"free", "entrepreneur"}
+
+
+def may_regenerate(user, *, adds_word_only: bool) -> tuple[bool, str]:
+    """(allowed, why not) for running generation again on a project that has a report."""
+    if settings.UNLOCK_ALL:
+        return True, ""
+    plan = effective_plan(user)
+    if plan not in NO_REGEN_PLANS or adds_word_only:
+        return True, ""
+    return False, ("Regeneration is not included in the Entrepreneur plan. You can still "
+                   "create this report's Word document once, without changes. To regenerate "
+                   "with new inputs, move to Consultant & CA or buy another Entrepreneur "
+                   "report for a new project.")
 
 
 def may_export(user, kind: str) -> tuple[bool, str]:

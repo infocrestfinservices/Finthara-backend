@@ -26,7 +26,7 @@ from models.report_model import Report
 from models.questionnaire_model import QuestionnaireAnswer
 from dependencies import get_owned_project, get_current_user, require_project_editor
 from models.user_model import User
-from services.entitlements import claim_generation, may_export
+from services.entitlements import claim_generation, may_export, may_regenerate
 from services import generation_jobs
 
 from purpose_config import resolve_purpose, get_config
@@ -930,6 +930,23 @@ def _require(allowed_reason):
         raise HTTPException(status_code=402, detail=why)
 
 
+def _adds_word_only(db: Session, project: Project, req) -> bool:
+    """True when this run only adds the Word report to an existing, unchanged report:
+    the written report is asked for, has not been written yet, and nothing about the
+    inputs is being changed (no refresh, no new instructions, no edited answers)."""
+    if req.excel_only or req.refresh_inputs or (req.instructions or "").strip():
+        return False
+    if project.report is not None and project.report.word_report:
+        return False
+    stored = _stored_answers(db, project)
+    if req.template_id and str(stored.get(_TEMPLATE_KEY) or "") != str(req.template_id):
+        return False
+    for key, value in (req.purpose_answers or {}).items():
+        if str(stored.get(key)) != str(value):
+            return False
+    return True
+
+
 def _plan_holder(db: Session, project: Project, current_user: User) -> User:
     """Whose plan covers this project's generation / downloads. For your own project that's
     you; for a project you can only touch as a team member, it's the account that owns it —
@@ -954,7 +971,12 @@ def generate(req: GenerateRequest, project: Project = Depends(require_project_ed
     """
     # claim, not just check: a new project paid for with a one-time Entrepreneur credit
     # spends that credit here (see services.entitlements.claim_generation).
-    _require(claim_generation(db, _plan_holder(db, project, current_user), project))
+    holder = _plan_holder(db, project, current_user)
+    # A project that already has a report is a REGENERATION. Entrepreneur pays for one
+    # report: the only further run it gets is adding that report's Word document.
+    if project.report is not None:
+        _require(may_regenerate(holder, adds_word_only=_adds_word_only(db, project, req)))
+    _require(claim_generation(db, holder, project))
 
     active = generation_jobs.find_active(db, project.id)
     if active:
@@ -1275,6 +1297,10 @@ def _run_generation(db: Session, project: Project, req: GenerateRequest, prog=No
         except Exception as e:
             # Not 502 — see the note above on the AI-inputs failure.
             raise HTTPException(status_code=409, detail=f"Model generation failed: {e}")
+        # Explicit marker that the written report was produced. The narrative dict alone
+        # cannot tell: the Word download fills a few sections into a workbook-only model
+        # and saves them back. Read by Report.word_report (the Entrepreneur regeneration rule).
+        model["word_report"] = True
 
     # Workbook annex — the SWOT and Conclusion sheets. Parse the SWOT already produced
     # in agent_context (no second LLM call) and synthesise a figures-grounded
