@@ -33,6 +33,9 @@ class Invoice(Base):
     # ── the customer, as they were ────────────────────────────────────────────
     customer_name = Column(String, nullable=True)
     customer_email = Column(String, nullable=False)
+    # A business customer's own GSTIN and registered name — what lets them claim the GST.
+    customer_gstin = Column(String, nullable=True)
+    customer_company = Column(String, nullable=True)
 
     # ── the supplier, as they were ────────────────────────────────────────────
     supplier_name = Column(String, nullable=False)
@@ -66,6 +69,8 @@ class Invoice(Base):
     amount_due = Column(Float, default=0.0)
 
     place_of_supply = Column(String, nullable=True)
+    # A statement the document must carry, e.g. for an export of services without GST.
+    tax_note = Column(String, nullable=True)
 
     status = Column(String, default="paid")            # paid | cancelled
     issued_at = Column(DateTime, default=datetime.utcnow, index=True)

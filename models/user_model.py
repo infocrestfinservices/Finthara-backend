@@ -32,6 +32,12 @@ class User(Base):
 
     # ── Profile ─────────────────────────────────────────────────────────────
     phone = Column(String, nullable=True)
+    # Billing details for GST invoices, remembered from checkout: the customer's state (GST
+    # state code, e.g. "23") decides CGST+SGST vs IGST; a business GSTIN and name are printed
+    # on the invoice so the customer can claim input credit. All optional until GST applies.
+    billing_state = Column(String, nullable=True)
+    billing_gstin = Column(String, nullable=True)
+    billing_company = Column(String, nullable=True)
     # A data: URI (base64), not a file path — App Platform's filesystem is ephemeral and a
     # path saved to disk would vanish on the next deploy. Small enough (validated at upload)
     # that storing it as text in the row is fine without adding blob storage.

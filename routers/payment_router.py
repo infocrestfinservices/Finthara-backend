@@ -35,6 +35,7 @@ from models.subscription_model import WebhookEvent
 from models.user_model import User
 from services.entitlements import PURCHASABLE, can_purchase, grant_plan
 from services import cashfree_gateway as cf
+from services import gst
 from services import coupons as coupon_service
 from services.email_service import send_plan_purchase_email
 
@@ -87,6 +88,11 @@ class OrderRequest(BaseModel):
     # Cashfree requires a phone number. Sent only when the account has none on file; it is
     # then saved to the profile so it is not asked for again.
     phone: str | None = None
+    # GST billing details (used only once GST applies). `state` is a GST state code or name
+    # and decides CGST+SGST vs IGST; a business GSTIN overrides it with its own state.
+    state: str | None = None
+    gstin: str | None = None
+    company: str | None = None
 
 
 class VerifyRequest(BaseModel):
@@ -123,6 +129,11 @@ def payment_config():
         "mode": cf.mode(),
         "currency": "INR",
         "plans": [{"id": k, **v} for k, v in PLANS.items()],
+        # Prices above are GST-exclusive. When GST applies, checkout adds `rate` on top and
+        # asks for the customer's state (from this list).
+        "gst": {"registered": gst.registered(), "rate": gst.rate(),
+                "company_state": gst.company_state(),
+                "states": [{"code": c, "name": n} for c, n in gst.STATES.items()]},
     }
 
 
@@ -176,6 +187,30 @@ def create_order(req: OrderRequest, current_user: User = Depends(get_current_use
         # Not 503: App Platform's edge replaces a 503's body with its own error page.
         raise HTTPException(status_code=409, detail="Payments are not configured on this server.")
 
+    # GST on top of the (coupon-reduced) plan price. The customer's state decides the split.
+    customer_state = customer_gstin = customer_company = None
+    if gst.registered():
+        if (req.gstin or "").strip():
+            customer_gstin = gst.clean_gstin(req.gstin)
+            if not customer_gstin:
+                raise HTTPException(status_code=400, detail="That GSTIN is not valid. "
+                                    "It should be 15 characters, e.g. 23ABCDE1234F1Z5.")
+            customer_state = customer_gstin[:2]      # a registered business is placed by it
+            customer_company = (req.company or "").strip()[:150] or current_user.billing_company
+        else:
+            customer_state = gst.state_code(req.state) or gst.state_code(current_user.billing_state)
+        if not customer_state:
+            raise HTTPException(status_code=400, detail={
+                "message": "Please choose your state — it decides how GST is applied.",
+                "state_required": True})
+        current_user.billing_state = customer_state
+        if customer_gstin:
+            current_user.billing_gstin = customer_gstin
+            current_user.billing_company = customer_company
+    tax = gst.compute(amount, customer_state)
+    taxable = amount
+    amount = tax["total"]
+
     phone = _clean_phone(current_user.phone) or _clean_phone(req.phone)
     if not phone:
         # The frontend shows a phone field on exactly this answer and sends the order again.
@@ -190,6 +225,9 @@ def create_order(req: OrderRequest, current_user: User = Depends(get_current_use
     payment = Payment(user_id=current_user.id, gateway="cashfree", plan=plan_key,
                       amount=amount, amount_paise=int(round(amount * 100)), currency="INR",
                       coupon_code=(coupon.code if coupon else None), discount=discount,
+                      taxable_amount=taxable, tax_rate=tax["tax_rate"], cgst=tax["cgst"],
+                      sgst=tax["sgst"], igst=tax["igst"], customer_state=customer_state,
+                      customer_gstin=customer_gstin, customer_company=customer_company,
                       status="created")
     db.add(payment)
     db.commit()
@@ -222,6 +260,7 @@ def create_order(req: OrderRequest, current_user: User = Depends(get_current_use
         "list_amount": float(plan["amount"]),
         "discount": discount,
         "coupon": (coupon.code if coupon else None),
+        "tax": tax,
     }
 
 
@@ -419,6 +458,9 @@ def my_payments(current_user: User = Depends(get_current_user),
     from services.entitlements import entitlements
     return {
         **entitlements(db, current_user),
+        # Remembered GST billing details, so checkout can pre-fill them.
+        "billing": {"state": current_user.billing_state, "gstin": current_user.billing_gstin,
+                    "company": current_user.billing_company},
         # Nothing renews automatically any more; kept so older clients reading it still work.
         "subscription": None,
         "payments": [{"plan": p.plan, "amount": p.amount, "currency": p.currency,

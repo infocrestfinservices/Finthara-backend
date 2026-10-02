@@ -120,19 +120,43 @@ def for_payment(db, payment):
         from datetime import timedelta
         period_end = issued + timedelta(days=spec["period_days"])
 
+    from services import gst
+    gross = float(payment.amount or 0)
+    money, place, note = None, None, None
+    if payment.gateway == "paypal":
+        # Paid in USD from outside India: an export of services, invoiced without GST.
+        money = {"taxable_value": round(gross, 2), "tax_rate": 0.0,
+                 "cgst": 0.0, "sgst": 0.0, "igst": 0.0, "total": round(gross, 2)}
+        place = "Outside India"
+        if gst.registered():
+            note = ("Export of services — supply meant for export under LUT without "
+                    "payment of integrated tax.")
+    elif payment.taxable_amount is not None:
+        # GST-exclusive checkout: the split was fixed when the order was made.
+        money = {"taxable_value": round(float(payment.taxable_amount), 2),
+                 "tax_rate": float(payment.tax_rate or 0), "cgst": float(payment.cgst or 0),
+                 "sgst": float(payment.sgst or 0), "igst": float(payment.igst or 0),
+                 "total": round(gross, 2)}
+        place = gst.state_label(payment.customer_state)
+
     return _create(db, user=user, payment=payment, subscription=None,
-                   plan=payment.plan, gross=float(payment.amount or 0),
+                   plan=payment.plan, gross=gross,
                    discount=float(payment.discount or 0),
                    coupon_code=payment.coupon_code,
                    issued_at=issued, period_start=issued, period_end=period_end,
-                   currency=payment.currency or "INR")
+                   currency=payment.currency or "INR", money=money, place_of_supply=place,
+                   tax_note=note, customer_gstin=payment.customer_gstin,
+                   customer_company=payment.customer_company)
 
 
 def _create(db, *, user, payment, subscription, plan, gross, discount, coupon_code,
-            issued_at, period_start, period_end, description_suffix="", currency="INR"):
+            issued_at, period_start, period_end, description_suffix="", currency="INR",
+            money=None, place_of_supply=None, tax_note=None, customer_gstin=None,
+            customer_company=None):
     from models.invoice_model import Invoice
 
-    money = split_amount(gross)
+    # Rows from before GST-exclusive pricing carry no split; they keep the old derivation.
+    money = money or split_amount(gross)
     for attempt in range(5):
         inv = Invoice(
             invoice_number=_next_number(db, issued_at),
@@ -141,6 +165,8 @@ def _create(db, *, user, payment, subscription, plan, gross, discount, coupon_co
             subscription_id=subscription.id if subscription else None,
             customer_name=getattr(user, "full_name", None),
             customer_email=getattr(user, "email", "") or "",
+            customer_gstin=customer_gstin, customer_company=customer_company,
+            tax_note=tax_note,
             supplier_name=settings.COMPANY_NAME,
             supplier_address=settings.COMPANY_ADDRESS or None,
             supplier_email=settings.COMPANY_EMAIL or None,
@@ -153,7 +179,7 @@ def _create(db, *, user, payment, subscription, plan, gross, discount, coupon_co
             gross=round(float(gross), 2), discount=round(float(discount or 0), 2),
             coupon_code=coupon_code,
             amount_paid=round(float(gross), 2), amount_due=0.0,
-            place_of_supply=(settings.COMPANY_STATE or None),
+            place_of_supply=(place_of_supply or settings.COMPANY_STATE or None),
             issued_at=issued_at, status="paid",
             **money,
         )

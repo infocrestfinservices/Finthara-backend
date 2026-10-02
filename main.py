@@ -54,6 +54,9 @@ Base.metadata.create_all(bind=engine)
 # Columns added to models after their table already existed — create_all above never alters
 # an existing table, so these need an explicit ALTER TABLE. See database.ensure_columns.
 ensure_columns("users", {
+    "billing_state": "VARCHAR",
+    "billing_gstin": "VARCHAR",
+    "billing_company": "VARCHAR",
     "phone": "VARCHAR",
     "avatar_url": "VARCHAR",
     "theme_preference": "VARCHAR NOT NULL DEFAULT 'system'",
@@ -77,6 +80,14 @@ ensure_columns("payments", {
     "paypal_capture_id": "VARCHAR",
     "cashfree_order_id": "VARCHAR",
     "cashfree_payment_id": "VARCHAR",
+    "taxable_amount": "DOUBLE PRECISION",
+    "tax_rate": "DOUBLE PRECISION",
+    "cgst": "DOUBLE PRECISION",
+    "sgst": "DOUBLE PRECISION",
+    "igst": "DOUBLE PRECISION",
+    "customer_state": "VARCHAR",
+    "customer_gstin": "VARCHAR",
+    "customer_company": "VARCHAR",
 })
 ensure_index("ix_payments_cashfree_order_id", "payments", "cashfree_order_id", unique=True)
 ensure_index("ix_payments_cashfree_payment_id", "payments", "cashfree_payment_id")
@@ -84,6 +95,11 @@ ensure_index("ix_payments_cashfree_payment_id", "payments", "cashfree_payment_id
 # no Razorpay order at all. See models/payment_model.py.
 ensure_nullable("payments", "razorpay_order_id")
 ensure_index("ix_payments_paypal_order_id", "payments", "paypal_order_id", unique=True)
+ensure_columns("invoices", {
+    "customer_gstin": "VARCHAR",
+    "customer_company": "VARCHAR",
+    "tax_note": "VARCHAR",
+})
 ensure_columns("webhook_events", {
     "gateway": "VARCHAR NOT NULL DEFAULT 'razorpay'",
 })

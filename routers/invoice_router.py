@@ -42,7 +42,8 @@ def _as_dict(inv: Invoice) -> dict:
         "document_type": "Tax Invoice" if is_tax else "Bill of Supply",
         "issued_at": inv.issued_at.isoformat() if inv.issued_at else None,
         "status": inv.status,
-        "customer": {"name": inv.customer_name, "email": inv.customer_email},
+        "customer": {"name": inv.customer_name, "email": inv.customer_email,
+                     "gstin": inv.customer_gstin, "company": inv.customer_company},
         "supplier": {
             "name": inv.supplier_name, "address": inv.supplier_address,
             "email": inv.supplier_email, "gstin": inv.supplier_gstin,
@@ -64,6 +65,7 @@ def _as_dict(inv: Invoice) -> dict:
         "amount_paid": inv.amount_paid,
         "amount_due": inv.amount_due,
         "place_of_supply": inv.place_of_supply,
+        "tax_note": inv.tax_note,
     }
 
 

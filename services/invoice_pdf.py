@@ -105,8 +105,10 @@ def render(inv) -> bytes:
     y -= 14
 
     left_end = _block(c, M, y, [
+        getattr(inv, "customer_company", None) or None,
         inv.customer_name or inv.customer_email,
         inv.customer_email if inv.customer_name else None,
+        f"GSTIN {inv.customer_gstin}" if getattr(inv, "customer_gstin", None) else None,
     ], width=COL2 - M - 12 * mm)
 
     right_end = _block(c, COL2, y, [
@@ -148,7 +150,7 @@ def render(inv) -> bytes:
         c.drawString(M, y - i * 13, part)
     if is_tax and inv.sac_code:
         c.drawString(COL2 + 8 * mm, y, inv.sac_code)
-    c.drawRightString(PAGE_W - M, y, _money(inv.taxable_value if is_tax else inv.gross,
+    c.drawRightString(PAGE_W - M, y, _money((inv.taxable_value or 0) + (inv.discount or 0),
                                             inv.currency))
     y -= 13 * len(desc_lines) + 8
 
@@ -175,8 +177,13 @@ def render(inv) -> bytes:
         y -= gap
 
     if is_tax:
-        summary(f"Includes GST {inv.tax_rate * 100:.0f}%",
-                _money((inv.cgst or 0) + (inv.sgst or 0) + (inv.igst or 0), inv.currency))
+        summary("Taxable value", _money(inv.taxable_value, inv.currency))
+        half = (inv.tax_rate or 0) * 100 / 2
+        if inv.cgst or inv.sgst:
+            summary(f"CGST {half:g}%", _money(inv.cgst or 0, inv.currency))
+            summary(f"SGST {half:g}%", _money(inv.sgst or 0, inv.currency))
+        elif inv.igst:
+            summary(f"IGST {(inv.tax_rate or 0) * 100:g}%", _money(inv.igst, inv.currency))
     summary("Total", _money(inv.total, inv.currency))
     summary("Less amount paid", _money(inv.amount_paid, inv.currency))
 
@@ -195,6 +202,8 @@ def render(inv) -> bytes:
                      f"No tax has been charged on this supply.")
     if inv.place_of_supply:
         notes.append(f"Place of supply: {inv.place_of_supply}")
+    if getattr(inv, "tax_note", None):
+        notes.append(inv.tax_note)
     notes.append("This is a computer-generated document and needs no signature.")
 
     ny = M + 26

@@ -52,6 +52,18 @@ class Payment(Base):
     coupon_code = Column(String, nullable=True)
     discount = Column(Float, default=0.0)
 
+    # GST, fixed at order time. `amount` above is the TOTAL charged (taxable + GST); these
+    # say what it is made of, so the invoice repeats the checkout exactly rather than
+    # re-deriving it. NULL on rows from before GST-exclusive pricing.
+    taxable_amount = Column(Float, nullable=True)
+    tax_rate = Column(Float, nullable=True)
+    cgst = Column(Float, nullable=True)
+    sgst = Column(Float, nullable=True)
+    igst = Column(Float, nullable=True)
+    customer_state = Column(String, nullable=True)      # GST state code
+    customer_gstin = Column(String, nullable=True)
+    customer_company = Column(String, nullable=True)
+
     status = Column(String, default="created")     # created | paid | failed
     created_at = Column(DateTime, default=datetime.utcnow)
     paid_at = Column(DateTime, nullable=True)
