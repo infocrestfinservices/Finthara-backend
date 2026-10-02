@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from services.claude_service import invoke_llm
-from services.entitlements import may_generate, may_regenerate
+from services.entitlements import may_generate, may_regenerate, record_regeneration
 from models.user_model import User
 from models.project_model import Project
 from database import get_db
@@ -52,13 +52,15 @@ def invoke(request: LLMRequest, current_user: User = Depends(get_current_user),
     else:
         project_id = None
 
+    regenerating = None
     if project_id is not None:
         # A call tied to a project that already has a report rewrites that report — a
-        # regeneration. Refused outright (not answered with the chat's upgrade text, which
-        # the caller would otherwise save as the report's content).
+        # regeneration. Refused outright when none are left (not answered with the chat's
+        # upgrade text, which the caller would otherwise save as the report's content).
         from models.report_model import Report
         if db.query(Report.id).filter(Report.project_id == project_id).first():
-            ok, why = may_regenerate(current_user, adds_word_only=False)
+            regenerating = db.query(Project).filter(Project.id == project_id).first()
+            ok, why = may_regenerate(current_user, regenerating)
             if not ok:
                 raise HTTPException(status_code=402, detail=why)
 
@@ -68,6 +70,8 @@ def invoke(request: LLMRequest, current_user: User = Depends(get_current_user),
 
     try:
         result = invoke_llm(prompt=request.prompt, model=request.model)
+        if regenerating is not None and result:
+            record_regeneration(db, current_user, regenerating)
         return LLMResponse(text=result)
     except Exception as e:
         # Not 500 — App Platform's edge substitutes its own generic error page for a 5xx

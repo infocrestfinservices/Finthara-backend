@@ -21,7 +21,9 @@ class Payment(Base):
     # id columns below is populated. "razorpay" rows are history from before Cashfree.
     gateway = Column(String, nullable=False, default="cashfree")
 
-    plan = Column(String, nullable=False)          # entrepreneur | consultant_monthly | consultant_yearly
+    plan = Column(String, nullable=False)          # entrepreneur | consultant_* | regeneration
+    # For a "regeneration" purchase: the report it was bought for.
+    project_id = Column(Integer, nullable=True, index=True)
     # In the unit `currency` names — rupees for INR, dollars for USD, not paise/cents.
     amount = Column(Float, nullable=False)
     # Minor units (paise for INR, cents for USD) — what the gateway itself was actually asked

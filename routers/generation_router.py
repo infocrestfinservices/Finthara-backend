@@ -26,7 +26,8 @@ from models.report_model import Report
 from models.questionnaire_model import QuestionnaireAnswer
 from dependencies import get_owned_project, get_current_user, require_project_editor
 from models.user_model import User
-from services.entitlements import claim_generation, may_export, may_regenerate
+from services.entitlements import (claim_generation, may_export, may_regenerate,
+                                   record_regeneration, regeneration_status)
 from services import generation_jobs
 
 from purpose_config import resolve_purpose, get_config
@@ -930,23 +931,6 @@ def _require(allowed_reason):
         raise HTTPException(status_code=402, detail=why)
 
 
-def _adds_word_only(db: Session, project: Project, req) -> bool:
-    """True when this run only adds the Word report to an existing, unchanged report:
-    the written report is asked for, has not been written yet, and nothing about the
-    inputs is being changed (no refresh, no new instructions, no edited answers)."""
-    if req.excel_only or req.refresh_inputs or (req.instructions or "").strip():
-        return False
-    if project.report is not None and project.report.word_report:
-        return False
-    stored = _stored_answers(db, project)
-    if req.template_id and str(stored.get(_TEMPLATE_KEY) or "") != str(req.template_id):
-        return False
-    for key, value in (req.purpose_answers or {}).items():
-        if str(stored.get(key)) != str(value):
-            return False
-    return True
-
-
 def _plan_holder(db: Session, project: Project, current_user: User) -> User:
     """Whose plan covers this project's generation / downloads. For your own project that's
     you; for a project you can only touch as a team member, it's the account that owns it —
@@ -972,11 +956,13 @@ def generate(req: GenerateRequest, project: Project = Depends(require_project_ed
     # claim, not just check: a new project paid for with a one-time Entrepreneur credit
     # spends that credit here (see services.entitlements.claim_generation).
     holder = _plan_holder(db, project, current_user)
-    # A project that already has a report is a REGENERATION. Entrepreneur pays for one
-    # report: the only further run it gets is adding that report's Word document.
-    if project.report is not None:
-        _require(may_regenerate(holder, adds_word_only=_adds_word_only(db, project, req)))
+    # A project that already has a report is a REGENERATION: the plan includes a few per
+    # report, then each costs a bought credit. Counted only when the run succeeds.
+    is_regeneration = project.report is not None
+    if is_regeneration:
+        _require(may_regenerate(holder, project))
     _require(claim_generation(db, holder, project))
+    holder_id = holder.id
 
     active = generation_jobs.find_active(db, project.id)
     if active:
@@ -993,11 +979,23 @@ def generate(req: GenerateRequest, project: Project = Depends(require_project_ed
         proj = jdb.query(Project).filter(Project.id == pid).first()
         if not proj:
             raise RuntimeError("The project was deleted before its report could be built.")
-        return _run_generation(jdb, proj, GenerateRequest(**req_data),
-                               prog=lambda p, s: generation_jobs.progress(jdb, jjob, p, s))
+        result = _run_generation(jdb, proj, GenerateRequest(**req_data),
+                                 prog=lambda p, s: generation_jobs.progress(jdb, jjob, p, s))
+        if is_regeneration:
+            payer = jdb.query(User).filter(User.id == holder_id).first()
+            record_regeneration(jdb, payer, proj)
+        return result
 
     generation_jobs.submit(job.id, _work)
     return {"job_id": job.id, "status": "queued", "progress": 0, "stage": "Queued"}
+
+
+@router.get("/{project_id}/regenerations")
+def regenerations(project: Project = Depends(require_project_editor),
+                  db: Session = Depends(get_db),
+                  current_user: User = Depends(get_current_user)):
+    """How many regenerations this report has left, and the price of one more."""
+    return regeneration_status(_plan_holder(db, project, current_user), project)
 
 
 @router.get("/jobs/{job_id}")

@@ -73,6 +73,8 @@ ensure_columns("users", {
 })
 ensure_columns("projects", {
     "paid_with_credit": "BOOLEAN NOT NULL DEFAULT false",
+    "regenerations_used": "INTEGER NOT NULL DEFAULT 0",
+    "regeneration_credits": "INTEGER NOT NULL DEFAULT 0",
 })
 ensure_columns("payments", {
     "gateway": "VARCHAR NOT NULL DEFAULT 'razorpay'",
@@ -88,6 +90,7 @@ ensure_columns("payments", {
     "customer_state": "VARCHAR",
     "customer_gstin": "VARCHAR",
     "customer_company": "VARCHAR",
+    "project_id": "INTEGER",
 })
 ensure_index("ix_payments_cashfree_order_id", "payments", "cashfree_order_id", unique=True)
 ensure_index("ix_payments_cashfree_payment_id", "payments", "cashfree_payment_id")

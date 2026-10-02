@@ -33,7 +33,8 @@ from dependencies import get_current_user
 from models.payment_model import Payment
 from models.subscription_model import WebhookEvent
 from models.user_model import User
-from services.entitlements import PURCHASABLE, can_purchase, grant_plan
+from services.entitlements import (PURCHASABLE, REGEN_PRICE, REGEN_PRODUCT, can_purchase,
+                                   grant_plan)
 from services import cashfree_gateway as cf
 from services import gst
 from services import coupons as coupon_service
@@ -52,7 +53,9 @@ def _send_purchase_email(user: User, payment: Payment, invoice) -> None:
         send_plan_purchase_email(
             user.email, user.full_name,
             invoice_number=(invoice.invoice_number if invoice else f"payment-{payment.id}"),
-            plan_label=PLANS.get(payment.plan, {}).get("name", payment.plan),
+            plan_label=(PLANS.get(payment.plan, {}).get("name")
+                        or ("Report regeneration" if payment.plan == REGEN_PRODUCT
+                            else payment.plan)),
             amount=float(payment.amount or 0), currency=payment.currency or "INR",
             discount=float(payment.discount or 0))
     except Exception:
@@ -93,6 +96,27 @@ class OrderRequest(BaseModel):
     state: str | None = None
     gstin: str | None = None
     company: str | None = None
+    # For plan="regeneration": the report the extra regeneration is bought for.
+    project_id: int | None = None
+
+
+def _regeneration_project(db: Session, user: User, project_id: int | None):
+    """The report an extra regeneration is being bought for — the buyer must be able to
+    regenerate it (its owner, or an editor on the owner's team), and it must have a report."""
+    from models.project_model import Project
+    from services.roles import role_in_company, meets
+    project = db.query(Project).filter(Project.id == project_id).first() if project_id else None
+    if not project:
+        raise HTTPException(status_code=404, detail="Report not found.")
+    if project.user_id != user.id:
+        role = (role_in_company(db, owner_user_id=project.user_id, user_id=user.id)
+                if project.user_id is not None else None)
+        if not (role and meets(role, "editor")):
+            raise HTTPException(status_code=404, detail="Report not found.")
+    if project.report is None:
+        raise HTTPException(status_code=400, detail="Generate the report first — "
+                            "a regeneration is bought for an existing report.")
+    return project
 
 
 class VerifyRequest(BaseModel):
@@ -109,7 +133,7 @@ def _clean_phone(raw: str | None) -> str | None:
     return digits if re.fullmatch(r"[6-9]\d{9}", digits) else None
 
 
-def _return_url(order_id: str) -> str | None:
+def _return_url(order_id: str, regen_project=None) -> str | None:
     """Where Cashfree sends the browser back to for payment methods that leave the page
     (some netbanking / UPI flows). The pricing page picks up ?cf_order= and verifies it.
     Production Cashfree accepts only https, so a non-https FRONTEND_URL there sends none —
@@ -117,7 +141,9 @@ def _return_url(order_id: str) -> str | None:
     base = (settings.FRONTEND_URL or "").rstrip("/")
     if not base or (settings.cashfree_production and not base.startswith("https://")):
         return None
-    return f"{base}/pricing?cf_order={order_id}"
+    # A regeneration bought from the report screen returns to that report.
+    page = f"/report/{regen_project.id}" if regen_project else "/pricing"
+    return f"{base}{page}?cf_order={order_id}"
 
 
 @router.get("/config")
@@ -142,14 +168,22 @@ def create_order(req: OrderRequest, current_user: User = Depends(get_current_use
                  db: Session = Depends(get_db)):
     """Create a Cashfree order for a plan, at the price this server holds for it."""
     plan_key = (req.plan or "").strip().lower()
-    plan = PLANS.get(plan_key)
-    if not plan:
-        raise HTTPException(status_code=400, detail=f"Unknown plan: {req.plan}")
-    # Refused BEFORE any money moves: taking money for something that leaves someone with
-    # LESS than they had is the worst outcome a checkout can produce.
-    allowed, why = can_purchase(db, current_user, plan_key)
-    if not allowed:
-        raise HTTPException(status_code=409, detail=why)
+    regen_project = None
+    if plan_key == REGEN_PRODUCT:
+        # One extra regeneration for one report — not a plan, and never discounted.
+        regen_project = _regeneration_project(db, current_user, req.project_id)
+        if (req.coupon or "").strip():
+            raise HTTPException(status_code=400, detail="Coupons do not apply to regenerations.")
+        plan = {"name": "Report regeneration", "amount": REGEN_PRICE, "period": "one_time"}
+    else:
+        plan = PLANS.get(plan_key)
+        if not plan:
+            raise HTTPException(status_code=400, detail=f"Unknown plan: {req.plan}")
+        # Refused BEFORE any money moves: taking money for something that leaves someone
+        # with LESS than they had is the worst outcome a checkout can produce.
+        allowed, why = can_purchase(db, current_user, plan_key)
+        if not allowed:
+            raise HTTPException(status_code=409, detail=why)
 
     amount = float(plan["amount"])
     discount = 0.0
@@ -228,6 +262,7 @@ def create_order(req: OrderRequest, current_user: User = Depends(get_current_use
                       taxable_amount=taxable, tax_rate=tax["tax_rate"], cgst=tax["cgst"],
                       sgst=tax["sgst"], igst=tax["igst"], customer_state=customer_state,
                       customer_gstin=customer_gstin, customer_company=customer_company,
+                      project_id=(regen_project.id if regen_project else None),
                       status="created")
     db.add(payment)
     db.commit()
@@ -242,7 +277,7 @@ def create_order(req: OrderRequest, current_user: User = Depends(get_current_use
             customer_id=f"user_{current_user.id}",
             customer_email=current_user.email, customer_phone=phone,
             customer_name=current_user.full_name or "",
-            return_url=_return_url(order_id), note=plan["name"])
+            return_url=_return_url(order_id, regen_project), note=plan["name"])
     except cf.CashfreeError as e:
         payment.status = "failed"
         db.commit()
@@ -321,7 +356,14 @@ def _finalize(db: Session, payment: Payment) -> str:
                            payment.coupon_code, payment.id, e)
     # grant_plan EXTENDS what is left rather than resetting it, and a top-up only adds a
     # report credit — see services/entitlements.py.
-    grant_plan(user, payment.plan)
+    if payment.plan == REGEN_PRODUCT:
+        # One extra regeneration for the report it was bought for.
+        from models.project_model import Project
+        project = db.query(Project).filter(Project.id == payment.project_id).first()
+        if project is not None:
+            project.regeneration_credits = (project.regeneration_credits or 0) + 1
+    else:
+        grant_plan(user, payment.plan)
     db.commit()
     _issue_invoice_and_email(db, user, payment)
     logger.info("payments: order %s PAID by user %s — plan is now %s (expires %s)",

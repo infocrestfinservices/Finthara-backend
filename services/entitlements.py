@@ -57,21 +57,22 @@ _ALL_EXPORTS = {"pdf", "word", "excel"}
 PLANS = {
     "free": {
         "label": "Free", "amount": 0, "usd_amount": 0, "period": "free", "period_days": None,
-        "reports": 0, "exports": set(), "seats": 1,
+        "reports": 0, "exports": set(), "seats": 1, "free_regenerations": 0,
     },
     "entrepreneur": {
         "label": "Entrepreneur", "amount": 1999, "usd_amount": 20.99, "period": "one_time",
         "period_days": None, "reports": 1, "exports": _ALL_EXPORTS, "seats": 1, "topup": True,
+        "free_regenerations": 1,
     },
     "consultant_monthly": {
         "label": "Consultant & CA (Monthly)", "amount": 11000, "usd_amount": 114.99,
         "period": "monthly", "period_days": 30, "quota_cycles": 1,
-        "reports": 20, "exports": _ALL_EXPORTS, "seats": 3,
+        "reports": 20, "exports": _ALL_EXPORTS, "seats": 3, "free_regenerations": 2,
     },
     "consultant_yearly": {
         "label": "Consultant & CA (Yearly)", "amount": 119988, "usd_amount": 1254.99,
         "period": "yearly", "period_days": 365, "quota_cycles": 12,
-        "reports": 20, "exports": _ALL_EXPORTS, "seats": 3,
+        "reports": 20, "exports": _ALL_EXPORTS, "seats": 3, "free_regenerations": 2,
     },
     # ── legacy, not sold ──
     "basic": {
@@ -206,7 +207,7 @@ def entitlements(db, user) -> dict:
         "expires_at": (getattr(user, "plan_expires_at", None).isoformat()
                        if getattr(user, "plan_expires_at", None) else None),
         "report_credits": left_credits,
-        "can_regenerate": bool(settings.UNLOCK_ALL) or plan not in NO_REGEN_PLANS,
+        "free_regenerations": spec.get("free_regenerations"),
         "cycle_ends_at": None,
         "exports": sorted(spec["exports"]),
     }
@@ -304,24 +305,56 @@ def claim_generation(db, user, project) -> tuple[bool, str]:
     return True, ""
 
 
-# Plans that pay for a report ONCE. Their only run after the first is the one that adds
-# the Word document to a report that was built workbook-first (generation defaults to
-# excel_only) — the same report, unchanged inputs. Anything else is a regeneration, which
-# Consultant & CA includes and these do not.
-NO_REGEN_PLANS = {"free", "entrepreneur"}
+# ── Regenerations ──────────────────────────────────────────────────────────────────────
+# Any run on a project that already has a report is a regeneration — including the run
+# that adds the Word report to a workbook-only one. Each plan includes a number of them PER
+# REPORT (`free_regenerations`; None = unlimited, the legacy plans). After those, one more
+# costs REGEN_PRICE (+ GST), bought for that report only and spent on its next run.
+REGEN_PRODUCT = "regeneration"
+REGEN_PRICE = 50
 
 
-def may_regenerate(user, *, adds_word_only: bool) -> tuple[bool, str]:
-    """(allowed, why not) for running generation again on a project that has a report."""
+def regenerations_included(user) -> int | None:
     if settings.UNLOCK_ALL:
+        return None
+    return plan_spec(effective_plan(user)).get("free_regenerations")
+
+
+def regeneration_status(user, project) -> dict:
+    """What the report screen needs: how many included runs are used, paid ones waiting,
+    how many are left (None = unlimited), and the price of one more."""
+    included = regenerations_included(user)
+    used = int(getattr(project, "regenerations_used", 0) or 0)
+    paid = int(getattr(project, "regeneration_credits", 0) or 0)
+    left = None if included is None else max(0, included - used) + paid
+    return {"included": included, "used": used, "paid_credits": paid, "left": left,
+            "price": REGEN_PRICE}
+
+
+def may_regenerate(user, project) -> tuple[bool, str]:
+    """(allowed, why not) for running generation again on a project that has a report."""
+    status = regeneration_status(user, project)
+    if status["left"] is None or status["left"] > 0:
         return True, ""
-    plan = effective_plan(user)
-    if plan not in NO_REGEN_PLANS or adds_word_only:
-        return True, ""
-    return False, ("Regeneration is not included in the Entrepreneur plan. You can still "
-                   "create this report's Word document once, without changes. To regenerate "
-                   "with new inputs, move to Consultant & CA or buy another Entrepreneur "
-                   "report for a new project.")
+    n = status["included"]
+    return False, (f"Your plan includes {n} regeneration{'s' if n != 1 else ''} per report, "
+                   f"and this report has used {'it' if n == 1 else 'them'}. Buy one more "
+                   f"regeneration for ₹{REGEN_PRICE} + GST to continue.")
+
+
+def record_regeneration(db, user, project) -> None:
+    """Count one completed regeneration: an included one while any are left, otherwise a
+    paid credit. Called only after the run succeeded, so a failed run costs nothing."""
+    included = regenerations_included(user)
+    used = int(project.regenerations_used or 0)
+    if included is None or used < included:
+        project.regenerations_used = used + 1
+    elif (project.regeneration_credits or 0) > 0:
+        project.regeneration_credits = project.regeneration_credits - 1
+        project.regenerations_used = used + 1
+    else:
+        project.regenerations_used = used + 1      # allowed by an override (e.g. UNLOCK_ALL)
+    db.commit()
 
 
 def may_export(user, kind: str) -> tuple[bool, str]:

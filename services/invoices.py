@@ -88,6 +88,8 @@ def _next_number(db, when: datetime) -> str:
 
 
 def _describe(plan: str, period_start, period_end) -> str:
+    if plan == "regeneration":
+        return "1x Report regeneration"
     spec = plan_spec(plan)
     line = f"1x {spec['label']} Plan"
     if spec["period_days"]:
@@ -139,8 +141,15 @@ def for_payment(db, payment):
                  "total": round(gross, 2)}
         place = gst.state_label(payment.customer_state)
 
+    suffix = ""
+    if payment.plan == "regeneration" and getattr(payment, "project_id", None):
+        from models.project_model import Project
+        project = db.get(Project, payment.project_id)
+        if project is not None and project.title:
+            suffix = f" — {project.title}"
+
     return _create(db, user=user, payment=payment, subscription=None,
-                   plan=payment.plan, gross=gross,
+                   plan=payment.plan, gross=gross, description_suffix=suffix,
                    discount=float(payment.discount or 0),
                    coupon_code=payment.coupon_code,
                    issued_at=issued, period_start=issued, period_end=period_end,

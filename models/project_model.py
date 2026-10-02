@@ -30,6 +30,10 @@ class Project(Base):
     # generation retryable without spending a second credit, and keeps credit-paid projects
     # out of a Consultant plan's per-cycle count.
     paid_with_credit = Column(Boolean, default=False, nullable=False)
+    # Regenerations of THIS report: how many have run (the plan includes a few per report),
+    # and how many extra ones were bought and not yet spent (services.entitlements).
+    regenerations_used = Column(Integer, default=0, nullable=False)
+    regeneration_credits = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     user = relationship("User", back_populates="projects")
     # Deleting a project removes its dependent rows (their FKs are NOT NULL,
