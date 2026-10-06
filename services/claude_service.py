@@ -13,9 +13,16 @@ logger = logging.getLogger(__name__)
 _TIMEOUT_SECONDS = 900
 _MAX_RETRIES = 1
 
+_MISSING_KEY = ("DEEPSEEK_API_KEY is not set. Add it to backend/.env locally, or to the app's "
+                "environment variables on DigitalOcean, then restart the server.")
+if not settings.DEEPSEEK_API_KEY.strip():
+    logger.error("claude_service: %s", _MISSING_KEY)
+
 # The cheap work — agent analysis and the input-cell fill — always runs here.
+# api_key is never None: given None, the SDK silently falls back to OPENAI_API_KEY, which
+# would send DeepSeek calls out with the OpenAI key. An empty key is refused in _complete.
 client = OpenAI(
-    api_key=settings.DEEPSEEK_API_KEY,
+    api_key=settings.DEEPSEEK_API_KEY.strip() or "missing",
     base_url="https://api.deepseek.com",
     timeout=_TIMEOUT_SECONDS,
     max_retries=_MAX_RETRIES,
@@ -60,6 +67,8 @@ def _create(api: OpenAI, model: str, prompt: str, alt: bool):
 def _complete(prompt: str, model: str) -> tuple[str, str]:
     """One chat completion. Returns (content, finish_reason); content may be ''."""
     api = _heavy_client if model == HEAVY_MODEL else client
+    if api is client and not settings.DEEPSEEK_API_KEY.strip():
+        raise RuntimeError(_MISSING_KEY)
     alt = _alt_params.get(model, False)
     try:
         resp = _create(api, model, prompt, alt)

@@ -5,7 +5,10 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     DATABASE_URL: str
-    DEEPSEEK_API_KEY: str = "sk-e8bda1699430447e97c0d6fcbe83471a"
+    # From the environment only (.env locally, App-level env vars on DigitalOcean) — never
+    # written here. Empty means DeepSeek calls fail fast with a clear error
+    # (services/claude_service.py) rather than running on a key that lives in git history.
+    DEEPSEEK_API_KEY: str = ""
 
 
     DEEPSEEK_MODEL: str = "deepseek-v4-flash"
@@ -169,7 +172,10 @@ class Settings(BaseSettings):
         raw = [o.strip().rstrip("/") for o in (self.CORS_ORIGINS or "").split(",")]
         return [o for o in raw if o] or ["*"]
 
-    SECRET_KEY: str = "changeme"
+    # Signs every login and password-reset token. From the environment only — never written
+    # here: a default in the code is a key anyone reading the repo could forge logins with.
+    # Empty means token creation/checking fails with a clear error (services/auth_service.py).
+    SECRET_KEY: str = ""
     # Which sites the browser may call this API from, comma separated. Empty means "anything",
     # which is right on a laptop and wrong the moment this is on a domain. Kept as a plain
     # string rather than a list because that is what an environment variable can carry.
