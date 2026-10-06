@@ -53,6 +53,9 @@ class TeamOut(BaseModel):
     seats_limit: int
     members: list[MemberOut]
     pending_invites: list[InvitationOut]
+    # Paid seats on top of the plan's own, still running, and the monthly price of one more.
+    extra_seats: list[dict] = []
+    extra_seat_price: int = 0
 
 
 class MembershipOut(BaseModel):

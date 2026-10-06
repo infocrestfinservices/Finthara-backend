@@ -28,7 +28,8 @@ from schemas.team_schema import (
 )
 from services import audit_service, roles, team_service
 from services.email_service import send_team_invite_email
-from services.entitlements import effective_plan, plan_spec, seat_limit, team_enabled
+from services.entitlements import (SEAT_PRICE, active_extra_seats, effective_plan, plan_spec,
+                                   seat_limit, team_enabled)
 from services.team_service import TeamError
 
 logger = logging.getLogger("team")
@@ -74,7 +75,10 @@ def my_team(db: Session = Depends(get_db), current_user: User = Depends(get_curr
         team_enabled=team_enabled(owner),
         plan_label=plan_spec(effective_plan(owner))["label"],
         seats_used=team_service.seats_used(db, owner),
-        seats_limit=seat_limit(owner),
+        seats_limit=seat_limit(owner, db),
+        extra_seats=[{"id": s.id, "expires_at": s.expires_at}
+                     for s in active_extra_seats(db, owner)],
+        extra_seat_price=SEAT_PRICE,
         members=members,
         pending_invites=pending,
     )

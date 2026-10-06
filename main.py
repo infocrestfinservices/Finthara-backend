@@ -45,6 +45,7 @@ from models.coupon_model import Coupon, CouponRedemption  # noqa: F401
 # does import them eagerly, but keep it explicit and independent of router wiring.
 from models.company_model import CompanyUser, CompanyInvitation  # noqa: F401
 from models.audit_log_model import AuditLog  # noqa: F401
+from models.extra_seat_model import ExtraSeat  # noqa: F401  (paid team seats)
 # Background report-generation jobs — same reason (only referenced inside function bodies).
 from models.generation_job_model import GenerationJob  # noqa: F401
 
@@ -91,6 +92,7 @@ ensure_columns("payments", {
     "customer_gstin": "VARCHAR",
     "customer_company": "VARCHAR",
     "project_id": "INTEGER",
+    "extra_seat_id": "INTEGER",
 })
 ensure_index("ix_payments_cashfree_order_id", "payments", "cashfree_order_id", unique=True)
 ensure_index("ix_payments_cashfree_payment_id", "payments", "cashfree_payment_id")

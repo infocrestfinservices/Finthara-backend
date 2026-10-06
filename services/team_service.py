@@ -40,11 +40,11 @@ def seats_used(db: Session, owner: User) -> int:
 
 
 def _assert_seat_free(db: Session, owner: User) -> None:
-    limit = seat_limit(owner)
+    limit = seat_limit(owner, db)
     if seats_used(db, owner) >= limit:
         raise TeamError(
-            f"Your {owner.plan.title()} plan allows {limit} seats and they are all taken. "
-            f"Remove a member or upgrade to add more.")
+            f"All {limit} seats on your team are taken. Add a seat from the Team tab, "
+            f"or remove a member.")
 
 
 # ── membership ───────────────────────────────────────────────────────────────────────────

@@ -24,6 +24,8 @@ class Payment(Base):
     plan = Column(String, nullable=False)          # entrepreneur | consultant_* | regeneration
     # For a "regeneration" purchase: the report it was bought for.
     project_id = Column(Integer, nullable=True, index=True)
+    # For an "extra_seat" purchase that RENEWS a seat: which one. Empty = a new seat.
+    extra_seat_id = Column(Integer, nullable=True)
     # In the unit `currency` names — rupees for INR, dollars for USD, not paise/cents.
     amount = Column(Float, nullable=False)
     # Minor units (paise for INR, cents for USD) — what the gateway itself was actually asked

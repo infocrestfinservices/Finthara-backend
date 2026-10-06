@@ -33,8 +33,9 @@ from dependencies import get_current_user
 from models.payment_model import Payment
 from models.subscription_model import WebhookEvent
 from models.user_model import User
-from services.entitlements import (PURCHASABLE, REGEN_PRICE, REGEN_PRODUCT, can_purchase,
-                                   grant_plan)
+from services.entitlements import (PURCHASABLE, REGEN_PRICE, REGEN_PRODUCT, SEAT_PRICE,
+                                   SEAT_PRODUCT, can_purchase, grant_extra_seat, grant_plan,
+                                   team_enabled)
 from services import cashfree_gateway as cf
 from services import gst
 from services import coupons as coupon_service
@@ -54,8 +55,9 @@ def _send_purchase_email(user: User, payment: Payment, invoice) -> None:
             user.email, user.full_name,
             invoice_number=(invoice.invoice_number if invoice else f"payment-{payment.id}"),
             plan_label=(PLANS.get(payment.plan, {}).get("name")
-                        or ("Report regeneration" if payment.plan == REGEN_PRODUCT
-                            else payment.plan)),
+                        or {REGEN_PRODUCT: "Report regeneration",
+                            SEAT_PRODUCT: "Extra team member (1 month)"}.get(payment.plan)
+                        or payment.plan),
             amount=float(payment.amount or 0), currency=payment.currency or "INR",
             discount=float(payment.discount or 0))
     except Exception:
@@ -98,6 +100,8 @@ class OrderRequest(BaseModel):
     company: str | None = None
     # For plan="regeneration": the report the extra regeneration is bought for.
     project_id: int | None = None
+    # For plan="extra_seat": the seat being renewed; empty buys a new seat.
+    seat_id: int | None = None
 
 
 def _regeneration_project(db: Session, user: User, project_id: int | None):
@@ -133,7 +137,7 @@ def _clean_phone(raw: str | None) -> str | None:
     return digits if re.fullmatch(r"[6-9]\d{9}", digits) else None
 
 
-def _return_url(order_id: str, regen_project=None) -> str | None:
+def _return_url(order_id: str, regen_project=None, team: bool = False) -> str | None:
     """Where Cashfree sends the browser back to for payment methods that leave the page
     (some netbanking / UPI flows). The pricing page picks up ?cf_order= and verifies it.
     Production Cashfree accepts only https, so a non-https FRONTEND_URL there sends none —
@@ -142,6 +146,9 @@ def _return_url(order_id: str, regen_project=None) -> str | None:
     if not base or (settings.cashfree_production and not base.startswith("https://")):
         return None
     # A regeneration bought from the report screen returns to that report.
+    # A team seat returns to the Team tab.
+    if team:
+        return f"{base}/profile?tab=team&cf_order={order_id}"
     page = f"/report/{regen_project.id}" if regen_project else "/pricing"
     return f"{base}{page}?cf_order={order_id}"
 
@@ -175,6 +182,20 @@ def create_order(req: OrderRequest, current_user: User = Depends(get_current_use
         if (req.coupon or "").strip():
             raise HTTPException(status_code=400, detail="Coupons do not apply to regenerations.")
         plan = {"name": "Report regeneration", "amount": REGEN_PRICE, "period": "one_time"}
+    elif plan_key == SEAT_PRODUCT:
+        # One more team seat for a month (or a month more on an existing one).
+        if not team_enabled(current_user):
+            raise HTTPException(status_code=400, detail="Extra seats are for plans that include "
+                                "a team (Consultant & CA).")
+        if (req.coupon or "").strip():
+            raise HTTPException(status_code=400, detail="Coupons do not apply to team seats.")
+        if req.seat_id:
+            from models.extra_seat_model import ExtraSeat
+            if not (db.query(ExtraSeat.id)
+                      .filter(ExtraSeat.id == req.seat_id, ExtraSeat.user_id == current_user.id)
+                      .first()):
+                raise HTTPException(status_code=404, detail="Seat not found.")
+        plan = {"name": "Extra team member (1 month)", "amount": SEAT_PRICE, "period": "monthly"}
     else:
         plan = PLANS.get(plan_key)
         if not plan:
@@ -263,6 +284,7 @@ def create_order(req: OrderRequest, current_user: User = Depends(get_current_use
                       sgst=tax["sgst"], igst=tax["igst"], customer_state=customer_state,
                       customer_gstin=customer_gstin, customer_company=customer_company,
                       project_id=(regen_project.id if regen_project else None),
+                      extra_seat_id=(req.seat_id if plan_key == SEAT_PRODUCT else None),
                       status="created")
     db.add(payment)
     db.commit()
@@ -277,7 +299,8 @@ def create_order(req: OrderRequest, current_user: User = Depends(get_current_use
             customer_id=f"user_{current_user.id}",
             customer_email=current_user.email, customer_phone=phone,
             customer_name=current_user.full_name or "",
-            return_url=_return_url(order_id, regen_project), note=plan["name"])
+            return_url=_return_url(order_id, regen_project,
+                                   team=(plan_key == SEAT_PRODUCT)), note=plan["name"])
     except cf.CashfreeError as e:
         payment.status = "failed"
         db.commit()
@@ -356,7 +379,9 @@ def _finalize(db: Session, payment: Payment) -> str:
                            payment.coupon_code, payment.id, e)
     # grant_plan EXTENDS what is left rather than resetting it, and a top-up only adds a
     # report credit — see services/entitlements.py.
-    if payment.plan == REGEN_PRODUCT:
+    if payment.plan == SEAT_PRODUCT:
+        grant_extra_seat(db, user, payment)
+    elif payment.plan == REGEN_PRODUCT:
         # One extra regeneration for the report it was bought for.
         from models.project_model import Project
         project = db.query(Project).filter(Project.id == payment.project_id).first()

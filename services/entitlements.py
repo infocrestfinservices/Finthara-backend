@@ -95,9 +95,50 @@ def plan_spec(plan: str) -> dict:
     return PLANS.get((plan or "").strip().lower()) or PLANS[FREE_PLAN]
 
 
-def seat_limit(user) -> int:
-    """How many people (owner + members) this account's plan allows on its team."""
-    return plan_spec(effective_plan(user)).get("seats", 1)
+# ── Extra team seats ───────────────────────────────────────────────────────────────────────
+# Bought one at a time from the Team tab: SEAT_PRICE (+ GST) for SEAT_DAYS, on any plan that
+# includes a team (Consultant & CA, monthly or yearly — priced per month either way).
+SEAT_PRODUCT = "extra_seat"
+SEAT_PRICE = 200
+SEAT_DAYS = 30
+
+
+def active_extra_seats(db, user) -> list:
+    """The paid seats of this team owner that have not run out yet."""
+    from models.extra_seat_model import ExtraSeat
+    return (db.query(ExtraSeat)
+              .filter(ExtraSeat.user_id == user.id, ExtraSeat.expires_at > datetime.utcnow())
+              .order_by(ExtraSeat.expires_at).all())
+
+
+def seat_limit(user, db=None) -> int:
+    """How many people (owner + members) this account may have on its team: the plan's
+    seats, plus active paid seats when the plan includes a team at all. Without `db` only
+    the plan's seats are known."""
+    base = plan_spec(effective_plan(user)).get("seats", 1)
+    if db is None or base <= 1:
+        return base
+    return base + len(active_extra_seats(db, user))
+
+
+def grant_extra_seat(db, user, payment, now: datetime | None = None) -> None:
+    """A paid seat: renews the seat the payment names (time is added to what is left),
+    otherwise adds a new one for SEAT_DAYS."""
+    from models.extra_seat_model import ExtraSeat
+    now = now or datetime.utcnow()
+    seat = None
+    if getattr(payment, "extra_seat_id", None):
+        seat = (db.query(ExtraSeat)
+                  .filter(ExtraSeat.id == payment.extra_seat_id, ExtraSeat.user_id == user.id)
+                  .first())
+    if seat is None:
+        seat = ExtraSeat(user_id=user.id, expires_at=now + timedelta(days=SEAT_DAYS))
+        db.add(seat)
+    else:
+        start = seat.expires_at if seat.expires_at and seat.expires_at > now else now
+        seat.expires_at = start + timedelta(days=SEAT_DAYS)
+    db.flush()
+    seat.last_payment_id = payment.id
 
 
 def team_enabled(user) -> bool:

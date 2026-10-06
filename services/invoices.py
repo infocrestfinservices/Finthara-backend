@@ -90,6 +90,12 @@ def _next_number(db, when: datetime) -> str:
 def _describe(plan: str, period_start, period_end) -> str:
     if plan == "regeneration":
         return "1x Report regeneration"
+    if plan == "extra_seat":
+        line = "1x Extra team member (1 month)"
+        if period_start and period_end:
+            line += (f", {period_start.strftime('%d %b %Y')} to "
+                     f"{period_end.strftime('%d %b %Y')}")
+        return line
     spec = plan_spec(plan)
     line = f"1x {spec['label']} Plan"
     if spec["period_days"]:
@@ -118,7 +124,11 @@ def for_payment(db, payment):
     issued = payment.paid_at or datetime.utcnow()
     period_end = None
     spec = plan_spec(payment.plan)
-    if spec["period_days"]:
+    if payment.plan == "extra_seat":
+        from datetime import timedelta
+        from services.entitlements import SEAT_DAYS
+        period_end = issued + timedelta(days=SEAT_DAYS)
+    elif spec["period_days"]:
         from datetime import timedelta
         period_end = issued + timedelta(days=spec["period_days"])
 
