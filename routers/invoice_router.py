@@ -18,6 +18,7 @@ from dependencies import get_current_user
 from models.invoice_model import Invoice
 from models.user_model import User
 from services import invoice_pdf
+from services.amount_words import amount_in_words
 
 logger = logging.getLogger("invoices")
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
@@ -66,6 +67,7 @@ def _as_dict(inv: Invoice) -> dict:
         "amount_due": inv.amount_due,
         "place_of_supply": inv.place_of_supply,
         "tax_note": inv.tax_note,
+        "total_in_words": amount_in_words(inv.total, inv.currency),
     }
 
 

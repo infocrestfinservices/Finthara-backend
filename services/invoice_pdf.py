@@ -20,6 +20,8 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
+from services.amount_words import amount_in_words
+
 # Brand blue, the same one the app uses for its primary.
 BRAND = colors.HexColor("#1B3A6B")
 INK = colors.HexColor("#12181F")
@@ -109,6 +111,9 @@ def render(inv) -> bytes:
         inv.customer_name or inv.customer_email,
         inv.customer_email if inv.customer_name else None,
         f"GSTIN {inv.customer_gstin}" if getattr(inv, "customer_gstin", None) else None,
+        # The customer's state (the place of supply) belongs with the customer, on a GST
+        # invoice — it is what decided CGST+SGST against IGST.
+        f"State: {inv.place_of_supply}" if (is_tax and inv.place_of_supply) else None,
     ], width=COL2 - M - 12 * mm)
 
     right_end = _block(c, COL2, y, [
@@ -192,6 +197,12 @@ def render(inv) -> bytes:
     c.line(LABEL_X, y + 8, PAGE_W - M, y + 8)
     y -= 6
     summary("Amount due", _money(inv.amount_due, inv.currency), bold=True, size=12, gap=20)
+
+    # The total, written out.
+    c.setFillColor(MUTED); c.setFont("Helvetica", 8.5)
+    c.drawString(M, y, "Amount in words")
+    y = _block(c, M, y - 12, [amount_in_words(inv.total, inv.currency)], size=9.5,
+               width=PAGE_W - 2 * M) - 6
 
     # ── footer notes ──────────────────────────────────────────────────────────
     notes = []
