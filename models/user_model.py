@@ -25,6 +25,10 @@ class User(Base):
     # table nobody needs is a thing to keep in step for no benefit. Never settable through
     # any API: granted with grant_admin.py, against the database, on purpose.
     is_admin = Column(Boolean, default=False, nullable=False)
+    # The one account that decides who else is an admin (Roles tab). Every super admin is
+    # also an admin; an admin without this flag sees the whole console but cannot change
+    # roles. Like is_admin, never settable through any API — grant_admin.py --super.
+    is_super_admin = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_verified = Column(Boolean, default=False)
     email_verification_otp = Column(String, nullable=True)

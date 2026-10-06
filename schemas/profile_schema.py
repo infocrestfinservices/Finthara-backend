@@ -17,6 +17,7 @@ class ProfileResponse(BaseModel):
     notify_email: bool = True
     totp_enabled: bool = False
     is_admin: bool = False
+    is_super_admin: bool = False
 
     class Config:
         from_attributes = True

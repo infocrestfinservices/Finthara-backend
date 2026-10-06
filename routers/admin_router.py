@@ -496,12 +496,14 @@ class RoleChange(BaseModel):
 
 
 @router.get("/roles")
-def list_roles(db: Session = Depends(get_db)):
-    """Who holds which role. Admins first — the short list is the one being audited."""
+def list_roles(db: Session = Depends(get_db), admin: User = Depends(get_admin_user)):
+    """Who holds which role. Admins first — the short list is the one being audited.
+    `can_manage` is whether the caller may change roles: only a super admin can."""
     rows = db.query(User).order_by(User.is_admin.desc(), User.id.desc()).all()
     admins = [u for u in rows if u.is_admin]
     return {
         "admin_count": len(admins),
+        "can_manage": bool(getattr(admin, "is_super_admin", False)),
         "roles": [
             {"id": "admin", "label": "Admin",
              "description": "Full access to this console: every user, payment, project and "
@@ -515,6 +517,7 @@ def list_roles(db: Session = Depends(get_db)):
         "users": [{
             "id": u.id, "email": u.email, "full_name": u.full_name,
             "role": "admin" if u.is_admin else "user",
+            "super_admin": bool(getattr(u, "is_super_admin", False)),
             "plan": effective_plan(u),
             "created_at": u.created_at.isoformat() if u.created_at else None,
         } for u in rows],
@@ -524,11 +527,18 @@ def list_roles(db: Session = Depends(get_db)):
 @router.patch("/users/{user_id}/role")
 def set_role(user_id: int, body: RoleChange, db: Session = Depends(get_db),
              admin: User = Depends(get_admin_user)):
+    # Only the super admin decides who is an admin; other admins see the list read-only.
+    if not getattr(admin, "is_super_admin", False):
+        raise HTTPException(status_code=403,
+                            detail="Only the super admin can change who is an admin.")
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     if not body.is_admin:
+        if getattr(user, "is_super_admin", False):
+            raise HTTPException(status_code=400,
+                                detail="The super admin's access cannot be removed here.")
         if user.id == admin.id:
             raise HTTPException(
                 status_code=400,

@@ -71,6 +71,7 @@ ensure_columns("users", {
     "is_deleted": "BOOLEAN NOT NULL DEFAULT false",
     "deleted_at": "TIMESTAMP",
     "report_credits": "INTEGER NOT NULL DEFAULT 0",
+    "is_super_admin": "BOOLEAN NOT NULL DEFAULT false",
 })
 ensure_columns("projects", {
     "paid_with_credit": "BOOLEAN NOT NULL DEFAULT false",

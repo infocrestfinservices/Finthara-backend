@@ -45,6 +45,7 @@ class UserResponse(BaseModel):
     full_name: Optional[str] = None
     plan: Optional[str] = None
     is_admin: bool = False
+    is_super_admin: bool = False
     theme_preference: str = "system"
     avatar_url: Optional[str] = None
 

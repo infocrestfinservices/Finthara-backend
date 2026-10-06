@@ -9,6 +9,7 @@ staff member. This also adds the column, since there is no Alembic in this proje
     python grant_admin.py                       # who is an admin right now
     python grant_admin.py you@example.com       # grant
     python grant_admin.py you@example.com --revoke
+    python grant_admin.py you@example.com --super   # admin + may change who is an admin
 """
 import sys
 
@@ -35,6 +36,7 @@ def main():
     db = SessionLocal()
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     revoke = "--revoke" in sys.argv
+    make_super = "--super" in sys.argv and not revoke
 
     if not args:
         admins = db.query(User).filter(User.is_admin.is_(True)).all()
@@ -54,8 +56,13 @@ def main():
         print(f"no account with the email {email!r}")
         return
     user.is_admin = not revoke
+    if make_super:
+        user.is_super_admin = True
+    elif revoke:
+        user.is_super_admin = False
     db.commit()
-    print(f"{email} is {'NO LONGER' if revoke else 'now'} an admin")
+    print(f"{email} is {'NO LONGER' if revoke else 'now'} an admin"
+          f"{' (super admin)' if make_super else ''}")
 
 
 if __name__ == "__main__":
