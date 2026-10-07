@@ -91,7 +91,7 @@ class Settings(BaseSettings):
     # the person who knows them is not the person editing Python.
     COMPANY_NAME: str = "Finthara AI"
     COMPANY_ADDRESS: str = ""
-    COMPANY_EMAIL: str = "infocrestfinservices@gmail.com"
+    COMPANY_EMAIL: str = "support@finthara.com"
     COMPANY_STATE: str = ""
     # Empty = NOT registered for GST. That is not a cosmetic difference: an unregistered
     # business must not charge GST and must not issue a "Tax Invoice" — it issues a Bill of
