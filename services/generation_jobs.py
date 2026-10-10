@@ -69,6 +69,13 @@ def submit(job_id: str, work) -> None:
     _POOL.submit(_run, job_id, work)
 
 
+def submit_task(fn, *args) -> None:
+    """Run some other heavy work (the Excel download build — see services/excel_cache.py)
+    on the SAME pool, so it queues behind generations instead of running a third
+    LibreOffice alongside them."""
+    _POOL.submit(fn, *args)
+
+
 def progress(db, job: GenerationJob, pct: int, stage: str) -> None:
     job.progress = max(0, min(99, int(pct)))
     job.stage = stage[:120]

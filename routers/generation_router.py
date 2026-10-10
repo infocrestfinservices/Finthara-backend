@@ -28,7 +28,8 @@ from dependencies import get_owned_project, get_current_user, require_project_ed
 from models.user_model import User
 from services.entitlements import (claim_generation, may_export, may_regenerate,
                                    record_regeneration, regeneration_status)
-from services import generation_jobs
+from services import generation_jobs, excel_cache
+from database import SessionLocal
 
 from purpose_config import resolve_purpose, get_config
 from template_config import (default_template, get_template, find_template_by_id,
@@ -1404,10 +1405,81 @@ def _is_short(project: Project) -> bool:
     return str(getattr(project, "report_format", "") or "").strip().lower() == "short"
 
 
+def _excel_fingerprint(db: Session, project: Project) -> str:
+    """Everything the workbook is built from: an edit or a regeneration changes it, so a
+    cached file is only ever served for the exact data it was built from."""
+    q = (db.query(QuestionnaireAnswer.collected_data)
+           .filter(QuestionnaireAnswer.project_id == project.id).first())
+    rep = project.report
+    return excel_cache.fingerprint([
+        {c.name: getattr(project, c.name) for c in Project.__table__.columns},
+        q[0] if q else None,
+        rep.id if rep else None,
+        rep.financial_model if rep else None,
+    ])
+
+
+def _excel_build_job(project_id: int, fp: str) -> None:
+    """Worker-thread body: build the workbook on its own db session and cache it."""
+    db = SessionLocal()
+    try:
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            raise RuntimeError("The project was deleted.")
+        data, fname, media = _build_excel_file(db, project)
+        excel_cache.put(project_id, fp, data, fname, media)
+        excel_cache.finish(project_id)
+    except Exception as exc:                            # noqa: BLE001 — surfaced to the user
+        logger.exception("excel: background build failed for project %s", project_id)
+        msg = getattr(exc, "detail", None) or str(exc) or exc.__class__.__name__
+        excel_cache.finish(project_id, error=str(msg))
+    finally:
+        db.close()
+
+
+@router.post("/{project_id}/excel/prepare")
+def prepare_excel(project: Project = Depends(get_owned_project), db: Session = Depends(get_db),
+                  current_user: User = Depends(get_current_user)):
+    """Start building the workbook in the background (or report that it is already built
+    or building). The browser polls /excel/status, then downloads from /excel — so a build
+    longer than the platform's ~100 s request limit no longer ends in a 504."""
+    _require(may_export(_plan_holder(db, project, current_user), "excel"))
+    fp = _excel_fingerprint(db, project)
+    st = excel_cache.status(project.id, fp)
+    if st["status"] in ("ready", "running"):
+        return st
+    if excel_cache.begin(project.id):
+        generation_jobs.submit_task(_excel_build_job, project.id, fp)
+    return {"status": "running"}
+
+
+@router.get("/{project_id}/excel/status")
+def excel_status(project: Project = Depends(get_owned_project), db: Session = Depends(get_db),
+                 current_user: User = Depends(get_current_user)):
+    _require(may_export(_plan_holder(db, project, current_user), "excel"))
+    return excel_cache.status(project.id, _excel_fingerprint(db, project))
+
+
 @router.get("/{project_id}/excel")
 def download_excel(project: Project = Depends(get_owned_project), db: Session = Depends(get_db),
                    current_user: User = Depends(get_current_user)):
     _require(may_export(_plan_holder(db, project, current_user), "excel"))
+    # Serve the file prepared in the background when there is one for this exact data;
+    # otherwise build it here as before (and keep it for next time).
+    fp = _excel_fingerprint(db, project)
+    cached = excel_cache.get(project.id, fp)
+    if cached:
+        data, fname, media = cached
+    else:
+        data, fname, media = _build_excel_file(db, project)
+        excel_cache.put(project.id, fp, data, fname, media)
+    return StreamingResponse(BytesIO(data), media_type=media,
+                             headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
+def _build_excel_file(db: Session, project: Project) -> tuple:
+    """The workbook bytes, its filename and media type — the one builder behind both the
+    direct download and the background build, so both produce the same file."""
     purpose_key = resolve_purpose(project.purpose, project.financial_format)
     answers = _stored_answers(db, project)
 
@@ -1423,10 +1495,7 @@ def download_excel(project: Project = Depends(get_owned_project), db: Session = 
         except Exception as e:
             logger.exception("excel: short workbook failed for project %s", project.id)
             raise HTTPException(status_code=409, detail=f"Short workbook failed: {e}")
-        return StreamingResponse(
-            BytesIO(data), media_type=XLSX_MIME,
-            headers={"Content-Disposition":
-                     f'attachment; filename="{_slug(project.title)}_overview.xlsx"'})
+        return data, f"{_slug(project.title)}_overview.xlsx", XLSX_MIME
 
     # Ensure the workbook annex (SWOT + Conclusion) is populated even for projects
     # generated before the annex existed: if the stored answers carry no SWOT cells,
@@ -1483,9 +1552,8 @@ def download_excel(project: Project = Depends(get_owned_project), db: Session = 
                 logger.warning("excel: server recalc failed; serving filled workbook", exc_info=True)
         fname = template_filename(tpurpose, template["id"], f"{_slug(project.title)}_financial_model")
         media = XLSM_MIME if fname.endswith(".xlsm") else XLSX_MIME
-        logger.info("excel: streaming %s (%d bytes, %s)", fname, len(data), media)
-        return StreamingResponse(BytesIO(data), media_type=media,
-                                 headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+        logger.info("excel: built %s (%d bytes, %s)", fname, len(data), media)
+        return data, fname, media
 
     if has_sample(purpose_key):
         # Sample-driven purpose (no template-fill template): mirror the sample's
@@ -1497,9 +1565,7 @@ def download_excel(project: Project = Depends(get_owned_project), db: Session = 
         # the project + questionnaire answers; every other cell is an Excel formula.
         data = build_model_excel(_project_dict(project, answers))
 
-    fname = f"{_slug(project.title)}_financial_model.xlsx"
-    return StreamingResponse(BytesIO(data), media_type=XLSX_MIME,
-                             headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+    return data, f"{_slug(project.title)}_financial_model.xlsx", XLSX_MIME
 
 
 def _build_word_report(project: Project, db: Session):
