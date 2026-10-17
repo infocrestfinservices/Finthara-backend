@@ -40,7 +40,7 @@ from services.excel_model_builder import build_model_excel
 from services.word_builder import build_word
 from services.sample_blueprint_service import build_blueprint_text, has_sample
 from services.template_fill_service import fill_template, template_filename
-from services import optional_sheets
+from services import optional_sheets, hide_empty_rows
 from services.template_model_service import generate_template_inputs, derive_headline_kpis
 from services.template_introspect import load_schema
 from services.recalc_service import libreoffice_available, recalculate_xlsx, read_computed_kpis
@@ -1548,6 +1548,9 @@ def _build_excel_file(db: Session, project: Project) -> tuple:
         if libreoffice_available():
             try:
                 data = recalculate_xlsx(data)
+                # Only on a recalculated file: before recalc the formula cells hold no
+                # values, so "all sixty months are zero" cannot be known.
+                data = hide_empty_rows.apply(data)
             except Exception:
                 logger.warning("excel: server recalc failed; serving filled workbook", exc_info=True)
         fname = template_filename(tpurpose, template["id"], f"{_slug(project.title)}_financial_model")
