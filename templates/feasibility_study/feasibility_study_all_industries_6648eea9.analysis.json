@@ -1,0 +1,41 @@
+{
+  "kpis": [
+    {
+      "label": "Net Profit Margin",
+      "metric": "Net Profit Margin",
+      "sheet": "Ratios & DSCR",
+      "cell": "C8",
+      "type": "percent"
+    },
+    {
+      "label": "Quick Ratio",
+      "metric": "Quick Ratio",
+      "sheet": "Ratios & DSCR",
+      "cell": "C17",
+      "type": "ratio_x"
+    },
+    {
+      "label": "DSCR",
+      "metric": "DSCR",
+      "sheet": "Ratios & DSCR",
+      "cell": "C26",
+      "type": "ratio_x"
+    }
+  ],
+  "checks": [
+    {
+      "name": "Check (Cost = Finance)",
+      "sheet": "Project Cost",
+      "cell": "C21",
+      "tolerance": 1.0,
+      "expect": 0.0
+    },
+    {
+      "name": "Check (Assets − Liabilities)",
+      "sheet": "Balance Sheet",
+      "cell": "C21",
+      "tolerance": 1.0,
+      "expect": 0.0
+    }
+  ]
+}

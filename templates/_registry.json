@@ -27,19 +27,6 @@
       "source": "scan"
     },
     {
-      "id": "cma_manufacturing_feasibility_study_d1b26a1d",
-      "label": "CMA Manufacturing — Feasibility Study",
-      "file": "CMA_Manufacturing_Feasibility Study_Blank_Template.xlsx",
-      "currency": "INR",
-      "engine": "template_fill",
-      "purpose": "cma_data",
-      "universal": true,
-      "root": "templates",
-      "folder": "feasibility_study",
-      "uploaded": true,
-      "source": "scan"
-    },
-    {
       "id": "msme_financial_model_government_grant_ab20581f",
       "label": "MSME Financial Model — Government Grant",
       "file": "MSME_Financial_Model_Government Grant_BLANK_TEMPLATE.xlsx",
@@ -205,6 +192,19 @@
       "universal": false,
       "root": "templates",
       "folder": "other_cma",
+      "uploaded": true,
+      "source": "scan"
+    },
+    {
+      "id": "feasibility_study_all_industries_6648eea9",
+      "label": "Feasibility Study — All Industries",
+      "file": "CMA_Feasibility_Study_All_Industries_Blank_Template.xlsx",
+      "currency": "INR",
+      "engine": "template_fill",
+      "purpose": "feasibility_study",
+      "universal": false,
+      "root": "templates",
+      "folder": "feasibility_study",
       "uploaded": true,
       "source": "scan"
     }

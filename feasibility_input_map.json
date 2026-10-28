@@ -1,0 +1,739 @@
+{
+  "template": "templates/feasibility_study/CMA_Feasibility_Study_All_Industries_Blank_Template.xlsx",
+  "rules": [
+    "Money is in Rs lakh except per-unit prices (Rs per unit).",
+    "Every percent is a fraction: 0.25 = 25%.",
+    "industry must be one of 'industries'; it only changes labels, never calculations.",
+    "start_year = calendar year Year 1 starts in April (2026 = FY2026-27)."
+  ],
+  "industries": [
+    "General Business",
+    "Manufacturing",
+    "Retail & E-Commerce",
+    "Food & Restaurant",
+    "Tourism & Hospitality",
+    "Technology & Software",
+    "Healthcare & Pharma",
+    "Education & Training",
+    "Import-Export Trading",
+    "Transport & Logistics",
+    "Media & Entertainment",
+    "Agriculture & Farming",
+    "Renewable Energy",
+    "Custom Industry"
+  ],
+  "inputs": [
+    {
+      "key": "industry",
+      "sheet": "Assumptions",
+      "cell": "B3",
+      "kind": "text",
+      "unit": "select",
+      "label": "Industry / business type",
+      "required": true,
+      "note": "Pick the business type — labels, units and notes across the whole model adapt. Calculations are identical for every industry."
+    },
+    {
+      "key": "start_year",
+      "sheet": "Assumptions",
+      "cell": "B6",
+      "kind": "year",
+      "unit": "year Yr1 starts",
+      "label": "Commercial operations start (FY)",
+      "required": false,
+      "note": "Calendar year in which Year 1 starts (April). 2026 = FY2026-27. Every year / month heading in the model follows this."
+    },
+    {
+      "key": "capacity_per_month",
+      "sheet": "Assumptions",
+      "cell": "B5",
+      "kind": "number",
+      "unit": "units/month",
+      "label": "Installed / service capacity",
+      "required": true,
+      "note": "Rated output at 100% utilisation; effective output is governed by the utilisation ramp (Section 3). Define one 'unit' clearly for your business."
+    },
+    {
+      "key": "working_days_per_month",
+      "sheet": "Assumptions",
+      "cell": "B7",
+      "kind": "integer",
+      "unit": "days",
+      "label": "Working days / month (for WC norms)",
+      "required": true,
+      "note": "Standard month convention for holding-period working-capital sizing."
+    },
+    {
+      "key": "selling_price_per_unit",
+      "sheet": "Assumptions",
+      "cell": "B10",
+      "kind": "number",
+      "unit": "₹/unit",
+      "label": "Average selling price / unit (Yr1)",
+      "required": true,
+      "note": "Net-of-GST realisation per unit; escalated year-on-year by the price escalation (Section 4)."
+    },
+    {
+      "key": "direct_cost_per_unit",
+      "sheet": "Assumptions",
+      "cell": "B11",
+      "kind": "number",
+      "unit": "₹/unit",
+      "label": "Direct cost of goods / services per unit (Yr1)",
+      "required": true,
+      "note": "Bought-in goods / direct cost of delivering one unit, inclusive of normal wastage."
+    },
+    {
+      "key": "util_y1_m1",
+      "sheet": "Assumptions",
+      "cell": "B16",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 1 utilisation — month 1",
+      "required": true,
+      "note": "Commissioning / launch ramp-up"
+    },
+    {
+      "key": "util_y1_m2",
+      "sheet": "Assumptions",
+      "cell": "B17",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 1 utilisation — month 2",
+      "required": true,
+      "note": "Commissioning / launch ramp-up"
+    },
+    {
+      "key": "util_y1_m3",
+      "sheet": "Assumptions",
+      "cell": "B18",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 1 utilisation — month 3",
+      "required": true,
+      "note": "Commissioning / launch ramp-up"
+    },
+    {
+      "key": "util_y1_m4",
+      "sheet": "Assumptions",
+      "cell": "B19",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 1 utilisation — month 4",
+      "required": true,
+      "note": "Commissioning / launch ramp-up"
+    },
+    {
+      "key": "util_y1_m5",
+      "sheet": "Assumptions",
+      "cell": "B20",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 1 utilisation — month 5",
+      "required": true,
+      "note": "Commissioning / launch ramp-up"
+    },
+    {
+      "key": "util_y1_m6",
+      "sheet": "Assumptions",
+      "cell": "B21",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 1 utilisation — month 6",
+      "required": true,
+      "note": "Commissioning / launch ramp-up"
+    },
+    {
+      "key": "util_y1_m7",
+      "sheet": "Assumptions",
+      "cell": "B22",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 1 utilisation — month 7",
+      "required": true,
+      "note": "Stabilised ramp"
+    },
+    {
+      "key": "util_y1_m8",
+      "sheet": "Assumptions",
+      "cell": "B23",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 1 utilisation — month 8",
+      "required": true,
+      "note": "Stabilised ramp"
+    },
+    {
+      "key": "util_y1_m9",
+      "sheet": "Assumptions",
+      "cell": "B24",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 1 utilisation — month 9",
+      "required": true,
+      "note": "Stabilised ramp"
+    },
+    {
+      "key": "util_y1_m10",
+      "sheet": "Assumptions",
+      "cell": "B25",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 1 utilisation — month 10",
+      "required": true,
+      "note": "Stabilised ramp"
+    },
+    {
+      "key": "util_y1_m11",
+      "sheet": "Assumptions",
+      "cell": "B26",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 1 utilisation — month 11",
+      "required": true,
+      "note": "Stabilised ramp"
+    },
+    {
+      "key": "util_y1_m12",
+      "sheet": "Assumptions",
+      "cell": "B27",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 1 utilisation — month 12",
+      "required": true,
+      "note": "Stabilised ramp"
+    },
+    {
+      "key": "util_y2",
+      "sheet": "Assumptions",
+      "cell": "B28",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 2 utilisation",
+      "required": true,
+      "note": "Market established, ramp towards full capacity."
+    },
+    {
+      "key": "util_y3",
+      "sheet": "Assumptions",
+      "cell": "B29",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 3 utilisation",
+      "required": true,
+      "note": "Efficient operating band."
+    },
+    {
+      "key": "util_y4",
+      "sheet": "Assumptions",
+      "cell": "B30",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 4 utilisation",
+      "required": true,
+      "note": "Mature operations."
+    },
+    {
+      "key": "util_y5",
+      "sheet": "Assumptions",
+      "cell": "B31",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Year 5 utilisation",
+      "required": true,
+      "note": "Sustainable ceiling (allows maintenance downtime)."
+    },
+    {
+      "key": "price_escalation",
+      "sheet": "Assumptions",
+      "cell": "B33",
+      "kind": "percent",
+      "unit": "% p.a.",
+      "label": "Selling-price escalation",
+      "required": true,
+      "note": "Realisation growth broadly tracking input inflation."
+    },
+    {
+      "key": "direct_cost_escalation",
+      "sheet": "Assumptions",
+      "cell": "B34",
+      "kind": "percent",
+      "unit": "% p.a.",
+      "label": "Direct-material escalation",
+      "required": true,
+      "note": "Expected annual input-material price trend."
+    },
+    {
+      "key": "utility_escalation",
+      "sheet": "Assumptions",
+      "cell": "B35",
+      "kind": "percent",
+      "unit": "% p.a.",
+      "label": "Utility / power tariff escalation",
+      "required": true,
+      "note": "Annual drift in utility tariffs."
+    },
+    {
+      "key": "wage_escalation",
+      "sheet": "Assumptions",
+      "cell": "B36",
+      "kind": "percent",
+      "unit": "% p.a.",
+      "label": "Wage / salary escalation",
+      "required": true,
+      "note": "Annual increments + statutory revisions."
+    },
+    {
+      "key": "overhead_escalation",
+      "sheet": "Assumptions",
+      "cell": "B37",
+      "kind": "percent",
+      "unit": "% p.a.",
+      "label": "Other overhead escalation",
+      "required": true,
+      "note": "General inflation on fixed overheads."
+    },
+    {
+      "key": "utilities_per_unit",
+      "sheet": "Assumptions",
+      "cell": "B39",
+      "kind": "number",
+      "unit": "₹/unit",
+      "label": "Utilities & energy / unit",
+      "required": true,
+      "note": "Energy / utilities cost per unit; escalates with the utility-cost escalation (Section 4)."
+    },
+    {
+      "key": "consumables_per_unit",
+      "sheet": "Assumptions",
+      "cell": "B40",
+      "kind": "number",
+      "unit": "₹/unit",
+      "label": "Consumables & supplies / unit",
+      "required": true,
+      "note": "Consumable supplies consumed per unit."
+    },
+    {
+      "key": "packing_per_unit",
+      "sheet": "Assumptions",
+      "cell": "B41",
+      "kind": "number",
+      "unit": "₹/unit",
+      "label": "Packing & delivery / unit",
+      "required": true,
+      "note": "Packing / delivery / distribution cost per unit."
+    },
+    {
+      "key": "direct_labour_per_month",
+      "sheet": "Assumptions",
+      "cell": "B42",
+      "kind": "number",
+      "unit": "₹L/mo",
+      "label": "Direct labour (Year-1)",
+      "required": true,
+      "note": "Operating staff across shifts; semi-fixed, escalates with wages."
+    },
+    {
+      "key": "admin_salaries_per_month",
+      "sheet": "Assumptions",
+      "cell": "B44",
+      "kind": "number",
+      "unit": "₹L/mo",
+      "label": "Admin & management salaries",
+      "required": true,
+      "note": "Management, sales, accounts, admin, security."
+    },
+    {
+      "key": "fixed_utility_per_month",
+      "sheet": "Assumptions",
+      "cell": "B45",
+      "kind": "number",
+      "unit": "₹L/mo",
+      "label": "Fixed utility / facility charges",
+      "required": true,
+      "note": "Fixed utility / contract-demand charges independent of volume."
+    },
+    {
+      "key": "repairs_pct_of_equipment",
+      "sheet": "Assumptions",
+      "cell": "B46",
+      "kind": "percent",
+      "unit": "% of P&M/yr",
+      "label": "Repairs & maintenance",
+      "required": true,
+      "note": "Typically 1–2% of equipment cost per annum (spares, servicing)."
+    },
+    {
+      "key": "insurance_pct_of_assets",
+      "sheet": "Assumptions",
+      "cell": "B47",
+      "kind": "percent",
+      "unit": "% of FA/yr",
+      "label": "Insurance",
+      "required": true,
+      "note": "Typically ~0.4% of gross fixed assets p.a. (fire, burglary, breakdown)."
+    },
+    {
+      "key": "other_admin_per_month",
+      "sheet": "Assumptions",
+      "cell": "B48",
+      "kind": "number",
+      "unit": "₹L/mo",
+      "label": "Other admin overheads",
+      "required": true,
+      "note": "Office, travel, communication, audit, statutory, misc."
+    },
+    {
+      "key": "selling_dist_pct_of_sales",
+      "sheet": "Assumptions",
+      "cell": "B49",
+      "kind": "percent",
+      "unit": "% of sales",
+      "label": "Selling & distribution",
+      "required": true,
+      "note": "Freight, commission, marketing & distribution (variable with sales)."
+    },
+    {
+      "key": "term_loan",
+      "sheet": "Assumptions",
+      "cell": "B51",
+      "kind": "number",
+      "unit": "₹L",
+      "label": "Term loan sanctioned",
+      "required": true,
+      "note": "Funds ~57% of fixed assets. See 'Project Cost' sheet."
+    },
+    {
+      "key": "promoter_equity",
+      "sheet": "Assumptions",
+      "cell": "B52",
+      "kind": "number",
+      "unit": "₹L",
+      "label": "Promoter equity / capital",
+      "required": true,
+      "note": "Balancing contribution incl. WC margin money; D:E ≈ 1.04."
+    },
+    {
+      "key": "term_loan_interest",
+      "sheet": "Assumptions",
+      "cell": "B53",
+      "kind": "percent",
+      "unit": "% p.a.",
+      "label": "Term-loan interest rate",
+      "required": true,
+      "note": "MSME term loan ≈ Repo (5.25%) + ~2.65% + spread. SBI/BoB EBLR basis, 2026."
+    },
+    {
+      "key": "term_loan_moratorium_months",
+      "sheet": "Assumptions",
+      "cell": "B54",
+      "kind": "integer",
+      "unit": "months",
+      "label": "Term-loan moratorium (principal)",
+      "required": true,
+      "note": "Principal holiday during ramp-up; interest serviced monthly."
+    },
+    {
+      "key": "term_loan_repayment_months",
+      "sheet": "Assumptions",
+      "cell": "B55",
+      "kind": "integer",
+      "unit": "months",
+      "label": "Term-loan repayment period",
+      "required": true,
+      "note": "Equal monthly principal after moratorium (8-yr door-to-door)."
+    },
+    {
+      "key": "cc_interest",
+      "sheet": "Assumptions",
+      "cell": "B56",
+      "kind": "percent",
+      "unit": "% p.a.",
+      "label": "Working-capital (CC) interest rate",
+      "required": true,
+      "note": "Cash-credit on assessed bank finance. MSME WC 2026."
+    },
+    {
+      "key": "stock_days",
+      "sheet": "Assumptions",
+      "cell": "B58",
+      "kind": "number",
+      "unit": "days",
+      "label": "Raw-material / stock inventory  (days of consumption held)",
+      "required": true,
+      "note": "Days of direct-cost consumption held in stock."
+    },
+    {
+      "key": "finished_stock_days",
+      "sheet": "Assumptions",
+      "cell": "B59",
+      "kind": "number",
+      "unit": "days",
+      "label": "Finished goods / stock-in-trade  (days of cost held)",
+      "required": true,
+      "note": "Days of cost of operations held as finished stock."
+    },
+    {
+      "key": "debtor_days",
+      "sheet": "Assumptions",
+      "cell": "B60",
+      "kind": "number",
+      "unit": "days",
+      "label": "Receivables (debtors)",
+      "required": true,
+      "note": "Credit allowed to customers."
+    },
+    {
+      "key": "creditor_days",
+      "sheet": "Assumptions",
+      "cell": "B61",
+      "kind": "number",
+      "unit": "days",
+      "label": "Payables (creditors)",
+      "required": true,
+      "note": "Credit received from suppliers."
+    },
+    {
+      "key": "wc_margin",
+      "sheet": "Assumptions",
+      "cell": "B62",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Margin on working capital (NWC)",
+      "required": true,
+      "note": "Tandon 2nd method: 25% of current assets from long-term funds."
+    },
+    {
+      "key": "dep_building",
+      "sheet": "Assumptions",
+      "cell": "B64",
+      "kind": "percent",
+      "unit": "% SLM",
+      "label": "Premises, building & civil / fit-out depreciation (SLM)",
+      "required": true,
+      "note": "Building / civil — Companies Act Sch II (typical life ~30 yrs; confirm per asset)."
+    },
+    {
+      "key": "dep_equipment",
+      "sheet": "Assumptions",
+      "cell": "B65",
+      "kind": "percent",
+      "unit": "% SLM",
+      "label": "Equipment, machinery & systems depreciation (SLM)",
+      "required": true,
+      "note": "Equipment / machinery — Companies Act Sch II (typical life ~15 yrs; set per asset type)."
+    },
+    {
+      "key": "dep_electrical",
+      "sheet": "Assumptions",
+      "cell": "B66",
+      "kind": "percent",
+      "unit": "% SLM",
+      "label": "Electrical installation depreciation (SLM)",
+      "required": true,
+      "note": "Electrical installation — Companies Act Sch II (~10 yrs)."
+    },
+    {
+      "key": "dep_utilities",
+      "sheet": "Assumptions",
+      "cell": "B67",
+      "kind": "percent",
+      "unit": "% SLM",
+      "label": "Utilities depreciation (SLM)",
+      "required": true,
+      "note": "Utilities & services — Companies Act Sch II (~15 yrs)."
+    },
+    {
+      "key": "dep_misc",
+      "sheet": "Assumptions",
+      "cell": "B68",
+      "kind": "percent",
+      "unit": "% SLM",
+      "label": "Misc / office assets depreciation (SLM)",
+      "required": true,
+      "note": "Office / furniture / IT — Companies Act Sch II (furniture 10 yrs, computers 3 yrs)."
+    },
+    {
+      "key": "preop_amortisation",
+      "sheet": "Assumptions",
+      "cell": "B69",
+      "kind": "percent",
+      "unit": "% / yr",
+      "label": "Pre-operative amortisation",
+      "required": true,
+      "note": "Written off over 5 years (straight line)."
+    },
+    {
+      "key": "tax_rate",
+      "sheet": "Assumptions",
+      "cell": "B70",
+      "kind": "percent",
+      "unit": "%",
+      "label": "Corporate tax rate (effective)",
+      "required": true,
+      "note": "Sec 115BAA new domestic company: 22% + surcharge + cess ≈ 25.17%."
+    },
+    {
+      "key": "gst_rate",
+      "sheet": "Assumptions",
+      "cell": "B71",
+      "kind": "percent",
+      "unit": "%",
+      "label": "GST (pass-through)",
+      "required": true,
+      "note": "Illustrative 18% output & input GST; revenue modelled net of GST. Set to the product’s actual GST rate."
+    },
+    {
+      "key": "pc_land",
+      "sheet": "Project Cost",
+      "cell": "C5",
+      "kind": "number",
+      "unit": "₹ Lakh",
+      "label": "Land & site development",
+      "required": true,
+      "note": "Land / site / premises development (enter nil if premises are leased)."
+    },
+    {
+      "key": "pc_building",
+      "sheet": "Project Cost",
+      "cell": "C6",
+      "kind": "number",
+      "unit": "₹ Lakh",
+      "label": "Premises, building & civil / fit-out",
+      "required": true,
+      "note": "Construction / civil works / interiors & fit-out of premises."
+    },
+    {
+      "key": "pc_equipment",
+      "sheet": "Project Cost",
+      "cell": "C7",
+      "kind": "number",
+      "unit": "₹ Lakh",
+      "label": "Equipment, machinery & systems",
+      "required": true,
+      "note": "Core equipment, machinery, vehicles or systems & installation."
+    },
+    {
+      "key": "pc_electrical",
+      "sheet": "Project Cost",
+      "cell": "C8",
+      "kind": "number",
+      "unit": "₹ Lakh",
+      "label": "Electrical installation & power back-up",
+      "required": true,
+      "note": "Panels, wiring, transformer, DG / UPS back-up."
+    },
+    {
+      "key": "pc_utilities",
+      "sheet": "Project Cost",
+      "cell": "C9",
+      "kind": "number",
+      "unit": "₹ Lakh",
+      "label": "Utilities & services (water, HVAC, fire-fighting etc.)",
+      "required": true,
+      "note": "Water, cooling / air-conditioning, fire-fighting, other services."
+    },
+    {
+      "key": "pc_misc_assets",
+      "sheet": "Project Cost",
+      "cell": "C10",
+      "kind": "number",
+      "unit": "₹ Lakh",
+      "label": "Miscellaneous fixed assets (office, IT, furniture, tools)",
+      "required": true,
+      "note": "Furniture, computers, software / ERP, tools, testing equipment."
+    },
+    {
+      "key": "pc_contingency",
+      "sheet": "Project Cost",
+      "cell": "C11",
+      "kind": "number",
+      "unit": "₹ Lakh",
+      "label": "Contingency",
+      "required": true,
+      "note": "~3% on equipment / civil for cost overrun."
+    },
+    {
+      "key": "pc_preoperative",
+      "sheet": "Project Cost",
+      "cell": "C12",
+      "kind": "number",
+      "unit": "₹ Lakh",
+      "label": "Pre-operative & preliminary expenses",
+      "required": true,
+      "note": "Trial runs, interest during construction, fees, start-up and licensing costs."
+    },
+    {
+      "key": "pc_wc_margin",
+      "sheet": "Project Cost",
+      "cell": "C13",
+      "kind": "number",
+      "unit": "₹ Lakh",
+      "label": "Margin money for working capital",
+      "required": true,
+      "note": "Promoter margin toward the first working-capital cycle."
+    }
+  ],
+  "outputs": {
+    "total_project_cost": {
+      "sheet": "Project Cost",
+      "where": "C14"
+    },
+    "finance_check": {
+      "sheet": "Project Cost",
+      "where": "C21"
+    },
+    "net_sales": {
+      "sheet": "Profitability (Annual)",
+      "where": "row 9, columns C:G"
+    },
+    "ebitda": {
+      "sheet": "Profitability (Annual)",
+      "where": "row 27, columns C:G"
+    },
+    "ebitda_margin": {
+      "sheet": "Profitability (Annual)",
+      "where": "row 28, columns C:G"
+    },
+    "pat": {
+      "sheet": "Profitability (Annual)",
+      "where": "row 36, columns C:G"
+    },
+    "cash_accruals": {
+      "sheet": "Profitability (Annual)",
+      "where": "row 38, columns C:G"
+    },
+    "dscr": {
+      "sheet": "Ratios & DSCR",
+      "where": "row 25, columns C:G"
+    },
+    "average_dscr": {
+      "sheet": "Ratios & DSCR",
+      "where": "C26"
+    },
+    "current_ratio": {
+      "sheet": "Ratios & DSCR",
+      "where": "row 16, columns C:G"
+    },
+    "mpbf": {
+      "sheet": "Working Capital",
+      "where": "row 24, columns C:G"
+    },
+    "break_even_sales": {
+      "sheet": "Break-even & Sensitivity",
+      "where": "row 10, columns C:G"
+    },
+    "margin_of_safety": {
+      "sheet": "Break-even & Sensitivity",
+      "where": "row 12, columns C:G"
+    },
+    "balance_sheet_check": {
+      "sheet": "Balance Sheet",
+      "where": "row 21, columns C:H"
+    },
+    "cash_flow_check": {
+      "sheet": "Cash Flow",
+      "where": "row 21, columns C:H"
+    }
+  }
+}

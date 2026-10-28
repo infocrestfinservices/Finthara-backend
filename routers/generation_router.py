@@ -33,7 +33,7 @@ from database import SessionLocal
 
 from purpose_config import resolve_purpose, get_config
 from template_config import (default_template, get_template, find_template_by_id,
-                             template_path, _load_registry)
+                             template_path, _load_registry, list_templates)
 from services.financial_model_service import generate_financial_model
 from services.excel_builder import build_excel
 from services.excel_model_builder import build_model_excel
@@ -173,6 +173,34 @@ def _industry_template(industry: str):
 # CMA family already is the bank-loan format). Every other purpose gets its own.
 _CMA_PURPOSES = {"bank_loan", "cma_data", "term_loan", "project_finance", "dpr"}
 
+# The purpose strings a Feasibility Study project arrives with. internal_planning also
+# resolves to feasibility_study, but it is a different report and keeps its old routing.
+_FEASIBILITY_SLUGS = {"feasibility_study", "feasibility"}
+
+
+def _feasibility_template(app_purpose: str, currency: str = None):
+    """Feasibility Study's own all-industries workbook (folder 'feasibility_study'), when
+    the project IS a feasibility study and the workbook is on disk. Returns
+    (purpose, template) or (None, None) -- in which case routing is exactly as before.
+
+    The workbook is Rs-lakh throughout, so a project in another currency keeps its old
+    routing. A blank currency is taken as INR, the app's default."""
+    slug = re.sub(r"[^a-z0-9_]", "", str(app_purpose or "").casefold().replace(" ", "_"))
+    if slug not in _FEASIBILITY_SLUGS:
+        return None, None
+    if str(currency or "").strip() and str(currency).strip().upper() != "INR":
+        return None, None
+    try:
+        for pk, entries in _load_registry().items():
+            for t in entries:
+                if ((t.get("folder") or "") == "feasibility_study"
+                        and t.get("engine") == "template_fill"
+                        and template_path(pk, t["id"])):
+                    return pk, t
+    except Exception:
+        logger.warning("feasibility template lookup failed for %r", app_purpose, exc_info=True)
+    return None, None
+
 
 def _purpose_template(app_purpose: str):
     """A template dedicated to the REPORT PURPOSE — a government grant must produce a
@@ -189,10 +217,17 @@ def _purpose_template(app_purpose: str):
     candidates = [_slugify(app_purpose)]
     try:
         from purpose_config import resolve_purpose
-        candidates.append(_slugify(resolve_purpose(app_purpose, None)))
+        canonical = _slugify(resolve_purpose(app_purpose, None))
+        # internal_planning resolves to feasibility_study too; only a real feasibility
+        # project may borrow the feasibility workbook through its canonical key.
+        if canonical != "feasibility_study" or candidates[0] in _FEASIBILITY_SLUGS:
+            candidates.append(canonical)
     except Exception:
         pass
-    candidates = [c for c in dict.fromkeys(candidates) if c and c not in _CMA_PURPOSES]
+    # The feasibility workbook is picked only by _feasibility_template (which also checks
+    # the currency), never by folder name here.
+    candidates = [c for c in dict.fromkeys(candidates)
+                  if c and c not in _CMA_PURPOSES and c != "feasibility_study"]
     if not candidates:
         return None, None
     try:
@@ -210,7 +245,7 @@ def _purpose_template(app_purpose: str):
 
 
 def _resolve_template(purpose_key: str, answers: dict, industry: str = None,
-                      app_purpose: str = None):
+                      app_purpose: str = None, currency: str = None):
     """The template to fill, in priority order:
       1. the user's explicitly chosen template (by globally-unique id);
       2. a template dedicated to the REPORT PURPOSE (grant / VC / angel …) — the
@@ -225,6 +260,11 @@ def _resolve_template(purpose_key: str, answers: dict, industry: str = None,
         tpurpose, t = find_template_by_id(tid)
         if t and t.get("engine") == "template_fill":
             return tpurpose, t
+    # Feasibility Study has its own all-industries workbook; when it is installed it wins
+    # over the industry template. Any other purpose -- or no workbook -- falls through.
+    fpurpose, ftmpl = _feasibility_template(app_purpose, currency)
+    if ftmpl:
+        return fpurpose, ftmpl
     # INDUSTRY first, then purpose. The industry workbooks are the ones we generate and
     # have validated end-to-end (revenue = the industry's own driver, margin-based cost
     # of sales, sane ratios). The third-party purpose workbooks (grant / VC / angel) are
@@ -239,7 +279,15 @@ def _resolve_template(purpose_key: str, answers: dict, industry: str = None,
     ppurpose, ptmpl = _purpose_template(app_purpose)
     if ptmpl:
         return ppurpose, ptmpl
-    return purpose_key, default_template(purpose_key)
+    dflt = default_template(purpose_key)
+    # The feasibility workbook is chosen above for a real feasibility project only; a
+    # purpose that merely resolves to feasibility_study (internal_planning) keeps the
+    # default it had before that workbook existed.
+    if dflt and dflt.get("folder") == "feasibility_study":
+        dflt = next((t for t in list_templates(purpose_key)
+                     if t.get("engine") == "template_fill"
+                     and t.get("folder") != "feasibility_study"), None)
+    return purpose_key, dflt
 
 
 def _headline_finance(project: Project, answers: dict) -> tuple[float, float, float]:
@@ -392,6 +440,10 @@ def _reconcile_all(answers: dict, project: Project, template=None) -> dict:
     sheet is laid out differently; with no template given it runs, preserving the original
     behaviour for callers that have already established the family.
     """
+    if str((template or {}).get("id") or "").startswith("feasibility_study_all_industries_"):
+        # The Feasibility Study workbook has its own guard; the CMA chain below never sees it.
+        from services.feasibility_reconcile import reconcile_feasibility
+        return reconcile_feasibility(answers, project)
     if template is not None and not _has_cma_layout(template):
         logger.info("reconcile: template %r is not the CMA layout; guards stood down",
                     (template or {}).get("id"))
@@ -856,7 +908,7 @@ def review_answers(project: Project = Depends(get_owned_project),
     answers = _stored_answers(db, project)
     purpose_key = resolve_purpose(project.purpose, project.financial_format)
     tpurpose, template = _resolve_template(purpose_key, answers, project.industry,
-                                           project.purpose)
+                                           project.purpose, project.currency)
     if template and _reconcile_on_read(template):
         answers = _reconcile_all(answers, project, template)
     labels, types, options = {}, {}, {}
@@ -1077,7 +1129,8 @@ def _run_generation(db: Session, project: Project, req: GenerateRequest, prog=No
     # AI generates the user's OWN model as values for the template's input cells.
     # The sample workbook is a DESIGN BLUEPRINT only — we never keep its numbers.
     # Any cell value the user supplied explicitly (form) overrides the AI value.
-    tpurpose, template = _resolve_template(purpose_key, answers, project.industry, project.purpose)
+    tpurpose, template = _resolve_template(purpose_key, answers, project.industry, project.purpose,
+                                           project.currency)
 
     # Cell answers ("Sheet!Cell") are only meaningful for the template they were built
     # for: the same address means something completely different in another workbook.
@@ -1521,7 +1574,8 @@ def _build_excel_file(db: Session, project: Project) -> tuple:
         except Exception:
             logger.warning("excel: annex backfill failed for project %s", project.id, exc_info=True)
 
-    tpurpose, template = _resolve_template(purpose_key, answers, project.industry, project.purpose)
+    tpurpose, template = _resolve_template(purpose_key, answers, project.industry, project.purpose,
+                                           project.currency)
     # Only use template-fill when the sample workbook actually exists on disk.
     # If the samples were removed, fall through to the deterministic formula-driven
     # model (build_model_excel), which needs no sample and never 502s.
@@ -1582,7 +1636,8 @@ def _build_word_report(project: Project, db: Session):
     stored model (whose KPIs are the server-recalculated, consistent values)."""
     purpose_key = resolve_purpose(project.purpose, project.financial_format)
     answers = _stored_answers(db, project)
-    tpurpose, template = _resolve_template(purpose_key, answers, project.industry, project.purpose)
+    tpurpose, template = _resolve_template(purpose_key, answers, project.industry, project.purpose,
+                                           project.currency)
     if template and template.get("engine") == "docx_fill" and template_path(tpurpose, template["id"]):
         from services.docx_fill_service import fill_docx
         ctx = {f: getattr(project, f, None) for f in _PROJECT_FIELDS}

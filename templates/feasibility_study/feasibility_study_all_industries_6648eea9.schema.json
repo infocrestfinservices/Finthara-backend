@@ -1,0 +1,491 @@
+{
+  "template_id": "feasibility_study_all_industries_6648eea9",
+  "file": "CMA_Feasibility_Study_All_Industries_Blank_Template.xlsx",
+  "currency": "INR",
+  "truncated": false,
+  "groups": [
+    {
+      "title": "Assumptions",
+      "sheet": "Assumptions",
+      "fields": [
+        {
+          "cell": "B3",
+          "label": "Industry / business type",
+          "hint": "choose the business type; labels only, calculations are identical · Pick the business type — labels, units and notes across the whole model adapt. Calculations are identical for every industry.",
+          "default": null,
+          "type": "enum",
+          "options": [
+            "General Business",
+            "Manufacturing",
+            "Retail & E-Commerce",
+            "Food & Restaurant",
+            "Tourism & Hospitality",
+            "Technology & Software",
+            "Healthcare & Pharma",
+            "Education & Training",
+            "Import-Export Trading",
+            "Transport & Logistics",
+            "Media & Entertainment",
+            "Agriculture & Farming",
+            "Renewable Energy"
+          ]
+        },
+        {
+          "cell": "B5",
+          "label": "Installed / service capacity",
+          "hint": "units per month (volume, not money) · Rated output at 100% utilisation; effective output is governed by the utilisation ramp (Section 3). Define one 'unit' clearly for your business.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B6",
+          "label": "Commercial operations start (FY)",
+          "hint": "calendar year Year 1 starts in April (2026 = FY2026-27) · Calendar year in which Year 1 starts (April). 2026 = FY2026-27. Every year / month heading in the model follows this.",
+          "default": 2026,
+          "type": "number"
+        },
+        {
+          "cell": "B7",
+          "label": "Working days / month (for WC norms)",
+          "hint": "days · Standard month convention for holding-period working-capital sizing.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B10",
+          "label": "Average selling price / unit (Yr1)",
+          "hint": "Rs per unit (plain rupees, not lakh) · Net-of-GST realisation per unit; escalated year-on-year by the price escalation (Section 4).",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B11",
+          "label": "Direct cost of goods / services per unit (Yr1)",
+          "hint": "Rs per unit (plain rupees, not lakh) · Bought-in goods / direct cost of delivering one unit, inclusive of normal wastage.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B16",
+          "label": "Year 1 – Month 1",
+          "hint": "fraction (0.25 = 25%) · Commissioning / launch ramp-up",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B17",
+          "label": "Year 1 – Month 2",
+          "hint": "fraction (0.25 = 25%) · Commissioning / launch ramp-up",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B18",
+          "label": "Year 1 – Month 3",
+          "hint": "fraction (0.25 = 25%) · Commissioning / launch ramp-up",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B19",
+          "label": "Year 1 – Month 4",
+          "hint": "fraction (0.25 = 25%) · Commissioning / launch ramp-up",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B20",
+          "label": "Year 1 – Month 5",
+          "hint": "fraction (0.25 = 25%) · Commissioning / launch ramp-up",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B21",
+          "label": "Year 1 – Month 6",
+          "hint": "fraction (0.25 = 25%) · Commissioning / launch ramp-up",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B22",
+          "label": "Year 1 – Month 7",
+          "hint": "fraction (0.25 = 25%) · Stabilised ramp",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B23",
+          "label": "Year 1 – Month 8",
+          "hint": "fraction (0.25 = 25%) · Stabilised ramp",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B24",
+          "label": "Year 1 – Month 9",
+          "hint": "fraction (0.25 = 25%) · Stabilised ramp",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B25",
+          "label": "Year 1 – Month 10",
+          "hint": "fraction (0.25 = 25%) · Stabilised ramp",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B26",
+          "label": "Year 1 – Month 11",
+          "hint": "fraction (0.25 = 25%) · Stabilised ramp",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B27",
+          "label": "Year 1 – Month 12",
+          "hint": "fraction (0.25 = 25%) · Stabilised ramp",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B28",
+          "label": "Year 2 utilisation",
+          "hint": "fraction (0.25 = 25%) · Market established, ramp towards full capacity.",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B29",
+          "label": "Year 3 utilisation",
+          "hint": "fraction (0.25 = 25%) · Efficient operating band.",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B30",
+          "label": "Year 4 utilisation",
+          "hint": "fraction (0.25 = 25%) · Mature operations.",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B31",
+          "label": "Year 5 utilisation",
+          "hint": "fraction (0.25 = 25%) · Sustainable ceiling (allows maintenance downtime).",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B33",
+          "label": "Selling-price escalation",
+          "hint": "fraction (0.25 = 25%), % p.a. · Realisation growth broadly tracking input inflation.",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B34",
+          "label": "Direct-material escalation",
+          "hint": "fraction (0.25 = 25%), % p.a. · Expected annual input-material price trend.",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B35",
+          "label": "Utility / power tariff escalation",
+          "hint": "fraction (0.25 = 25%), % p.a. · Annual drift in utility tariffs.",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B36",
+          "label": "Wage / salary escalation",
+          "hint": "fraction (0.25 = 25%), % p.a. · Annual increments + statutory revisions.",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B37",
+          "label": "Other overhead escalation",
+          "hint": "fraction (0.25 = 25%), % p.a. · General inflation on fixed overheads.",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B39",
+          "label": "Utilities & energy / unit",
+          "hint": "Rs per unit (plain rupees, not lakh) · Energy / utilities cost per unit; escalates with the utility-cost escalation (Section 4).",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B40",
+          "label": "Consumables & supplies / unit",
+          "hint": "Rs per unit (plain rupees, not lakh) · Consumable supplies consumed per unit.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B41",
+          "label": "Packing & delivery / unit",
+          "hint": "Rs per unit (plain rupees, not lakh) · Packing / delivery / distribution cost per unit.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B42",
+          "label": "Direct labour (Year-1)",
+          "hint": "Rs LAKH (40 lakh = 40, NOT 4000000), per month · Operating staff across shifts; semi-fixed, escalates with wages.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B44",
+          "label": "Admin & management salaries",
+          "hint": "Rs LAKH (40 lakh = 40, NOT 4000000), per month · Management, sales, accounts, admin, security.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B45",
+          "label": "Fixed utility / facility charges",
+          "hint": "Rs LAKH (40 lakh = 40, NOT 4000000), per month · Fixed utility / contract-demand charges independent of volume.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B46",
+          "label": "Repairs & maintenance",
+          "hint": "fraction (0.25 = 25%), % of P&M/yr · Typically 1–2% of equipment cost per annum (spares, servicing).",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B47",
+          "label": "Insurance",
+          "hint": "fraction (0.25 = 25%), % of FA/yr · Typically ~0.4% of gross fixed assets p.a. (fire, burglary, breakdown).",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B48",
+          "label": "Other admin overheads",
+          "hint": "Rs LAKH (40 lakh = 40, NOT 4000000), per month · Office, travel, communication, audit, statutory, misc.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B49",
+          "label": "Selling & distribution",
+          "hint": "fraction (0.25 = 25%), % of sales · Freight, commission, marketing & distribution (variable with sales).",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B51",
+          "label": "Term loan sanctioned",
+          "hint": "Rs LAKH (40 lakh = 40, NOT 4000000) · Funds ~57% of fixed assets. See 'Project Cost' sheet.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B52",
+          "label": "Promoter equity / capital",
+          "hint": "Rs LAKH (40 lakh = 40, NOT 4000000) · Balancing contribution incl. WC margin money; D:E ≈ 1.04.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B53",
+          "label": "Term-loan interest rate",
+          "hint": "fraction (0.25 = 25%), % p.a. · MSME term loan ≈ Repo (5.25%) + ~2.65% + spread. SBI/BoB EBLR basis, 2026.",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B54",
+          "label": "Term-loan moratorium (principal)",
+          "hint": "months (whole number) · Principal holiday during ramp-up; interest serviced monthly.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B55",
+          "label": "Term-loan repayment period",
+          "hint": "months (whole number) · Equal monthly principal after moratorium (8-yr door-to-door).",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B56",
+          "label": "Working-capital (CC) interest rate",
+          "hint": "fraction (0.25 = 25%), % p.a. · Cash-credit on assessed bank finance. MSME WC 2026.",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B58",
+          "label": "Raw-material / stock inventory  (days of consumption held)",
+          "hint": "days · Days of direct-cost consumption held in stock.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B59",
+          "label": "Finished goods / stock-in-trade  (days of cost held)",
+          "hint": "days · Days of cost of operations held as finished stock.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B60",
+          "label": "Receivables (debtors)",
+          "hint": "days · Credit allowed to customers.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B61",
+          "label": "Payables (creditors)",
+          "hint": "days · Credit received from suppliers.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "B62",
+          "label": "Margin on working capital (NWC)",
+          "hint": "fraction (0.25 = 25%) · Tandon 2nd method: 25% of current assets from long-term funds.",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B64",
+          "label": "Premises, building & civil / fit-out depreciation (SLM)",
+          "hint": "fraction (0.25 = 25%), % SLM · Building / civil — Companies Act Sch II (typical life ~30 yrs; confirm per asset).",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B65",
+          "label": "Equipment, machinery & systems depreciation (SLM)",
+          "hint": "fraction (0.25 = 25%), % SLM · Equipment / machinery — Companies Act Sch II (typical life ~15 yrs; set per asset type).",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B66",
+          "label": "Electrical installation depreciation (SLM)",
+          "hint": "fraction (0.25 = 25%), % SLM · Electrical installation — Companies Act Sch II (~10 yrs).",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B67",
+          "label": "Utilities depreciation (SLM)",
+          "hint": "fraction (0.25 = 25%), % SLM · Utilities & services — Companies Act Sch II (~15 yrs).",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B68",
+          "label": "Misc / office assets depreciation (SLM)",
+          "hint": "fraction (0.25 = 25%), % SLM · Office / furniture / IT — Companies Act Sch II (furniture 10 yrs, computers 3 yrs).",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B69",
+          "label": "Pre-operative amortisation",
+          "hint": "fraction (0.25 = 25%), % / yr · Written off over 5 years (straight line).",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B70",
+          "label": "Corporate tax rate (effective)",
+          "hint": "fraction (0.25 = 25%) · Sec 115BAA new domestic company: 22% + surcharge + cess ≈ 25.17%.",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "B71",
+          "label": "GST (pass-through)",
+          "hint": "fraction (0.25 = 25%) · Illustrative 18% output & input GST; revenue modelled net of GST. Set to the product’s actual GST rate.",
+          "default": null,
+          "type": "percent"
+        }
+      ]
+    },
+    {
+      "title": "Project Cost",
+      "sheet": "Project Cost",
+      "fields": [
+        {
+          "cell": "C5",
+          "label": "Land & site development",
+          "hint": "Rs LAKH (40 lakh = 40, NOT 4000000) · Land / site / premises development (enter nil if premises are leased).",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "C6",
+          "label": "Premises, building & civil / fit-out",
+          "hint": "Rs LAKH (40 lakh = 40, NOT 4000000) · Construction / civil works / interiors & fit-out of premises.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "C7",
+          "label": "Equipment, machinery & systems",
+          "hint": "Rs LAKH (40 lakh = 40, NOT 4000000) · Core equipment, machinery, vehicles or systems & installation.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "C8",
+          "label": "Electrical installation & power back-up",
+          "hint": "Rs LAKH (40 lakh = 40, NOT 4000000) · Panels, wiring, transformer, DG / UPS back-up.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "C9",
+          "label": "Utilities & services (water, HVAC, fire-fighting etc.)",
+          "hint": "Rs LAKH (40 lakh = 40, NOT 4000000) · Water, cooling / air-conditioning, fire-fighting, other services.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "C10",
+          "label": "Miscellaneous fixed assets (office, IT, furniture, tools)",
+          "hint": "Rs LAKH (40 lakh = 40, NOT 4000000) · Furniture, computers, software / ERP, tools, testing equipment.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "C11",
+          "label": "Contingency",
+          "hint": "Rs LAKH (40 lakh = 40, NOT 4000000) · ~3% on equipment / civil for cost overrun.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "C12",
+          "label": "Pre-operative & preliminary expenses",
+          "hint": "Rs LAKH (40 lakh = 40, NOT 4000000) · Trial runs, interest during construction, fees, start-up and licensing costs.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "C13",
+          "label": "Margin money for working capital",
+          "hint": "Rs LAKH (40 lakh = 40, NOT 4000000) · Promoter margin toward the first working-capital cycle.",
+          "default": null,
+          "type": "number"
+        }
+      ]
+    }
+  ],
+  "constraints": "Money cells are in Rs LAKH (40 lakh = 40, never 4000000); only the per-unit price/cost cells are plain Rs per unit. Every percent is a decimal fraction (0.25 = 25%). Term loan (Assumptions!B51) + promoter equity (Assumptions!B52) MUST equal the sum of the Project Cost cells C5..C13. The model must be viable: positive EBITDA from Year 1 and average DSCR >= 1.5."
+}
