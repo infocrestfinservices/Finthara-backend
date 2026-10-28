@@ -1,4 +1,6 @@
-"""Builds a project's Excel workbook off the HTTP request and keeps the finished file.
+"""Builds a project's Excel workbook (and its PDF report) off the HTTP request and keeps
+the finished file. `kind` ("excel" / "pdf") keeps the two apart; everything below applies
+to both — the PDF is LibreOffice converting the Word report, the same slow step.
 
 Why: building the workbook (template fill + LibreOffice recalc, plus a one-time SWOT
 backfill on older projects) can take longer than the ~100 s the hosting platform lets a
@@ -32,7 +34,7 @@ _DIR = os.path.join(tempfile.gettempdir(), "finthara_excel_cache")
 _STALE_AFTER_S = 12 * 60
 
 _lock = threading.Lock()
-_state: dict[int, dict] = {}   # project_id -> {"status": "running"|"failed", "error", "at"}
+_state: dict[tuple, dict] = {}   # (project_id, kind) -> {"status", "error", "at"}
 
 
 def fingerprint(parts) -> str:
@@ -41,13 +43,14 @@ def fingerprint(parts) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
-def _paths(project_id: int) -> tuple[str, str]:
-    return (os.path.join(_DIR, f"{project_id}.bin"), os.path.join(_DIR, f"{project_id}.json"))
+def _paths(project_id: int, kind: str) -> tuple[str, str]:
+    return (os.path.join(_DIR, f"{project_id}.{kind}.bin"),
+            os.path.join(_DIR, f"{project_id}.{kind}.json"))
 
 
-def get(project_id: int, fp: str):
+def get(project_id: int, fp: str, kind: str = "excel"):
     """(data, filename, media_type) for a cached file built from `fp`, else None."""
-    data_path, meta_path = _paths(project_id)
+    data_path, meta_path = _paths(project_id, kind)
     try:
         with open(meta_path, encoding="utf-8") as fh:
             meta = json.load(fh)
@@ -59,11 +62,12 @@ def get(project_id: int, fp: str):
         return None
 
 
-def put(project_id: int, fp: str, data: bytes, fname: str, media: str) -> None:
+def put(project_id: int, fp: str, data: bytes, fname: str, media: str,
+        kind: str = "excel") -> None:
     """Store a finished file. Written to temp names and swapped in, so a reader never sees
     half a file; the meta (which carries the fingerprint) goes last."""
     os.makedirs(_DIR, exist_ok=True)
-    data_path, meta_path = _paths(project_id)
+    data_path, meta_path = _paths(project_id, kind)
     with open(data_path + ".tmp", "wb") as fh:
         fh.write(data)
     os.replace(data_path + ".tmp", data_path)
@@ -72,32 +76,33 @@ def put(project_id: int, fp: str, data: bytes, fname: str, media: str) -> None:
     os.replace(meta_path + ".tmp", meta_path)
 
 
-def begin(project_id: int) -> bool:
+def begin(project_id: int, kind: str = "excel") -> bool:
     """Mark a build as started. False if one is already running (so a double click or a
     second team member latches onto the build in flight instead of starting another)."""
     with _lock:
-        cur = _state.get(project_id)
+        cur = _state.get((project_id, kind))
         if cur and cur["status"] == "running" and time.time() - cur["at"] < _STALE_AFTER_S:
             return False
-        _state[project_id] = {"status": "running", "error": None, "at": time.time()}
+        _state[(project_id, kind)] = {"status": "running", "error": None, "at": time.time()}
         return True
 
 
-def finish(project_id: int, error: str | None = None) -> None:
+def finish(project_id: int, error: str | None = None, kind: str = "excel") -> None:
     with _lock:
         if error:
-            _state[project_id] = {"status": "failed", "error": error[:480], "at": time.time()}
+            _state[(project_id, kind)] = {"status": "failed", "error": error[:480],
+                                          "at": time.time()}
         else:
-            _state.pop(project_id, None)
+            _state.pop((project_id, kind), None)
 
 
-def status(project_id: int, fp: str) -> dict:
+def status(project_id: int, fp: str, kind: str = "excel") -> dict:
     """ready (a file for this exact data is cached), running, failed, or none."""
     with _lock:
-        cur = dict(_state.get(project_id) or {})
+        cur = dict(_state.get((project_id, kind)) or {})
     if cur.get("status") == "running" and time.time() - cur["at"] < _STALE_AFTER_S:
         return {"status": "running"}
-    if get(project_id, fp) is not None:
+    if get(project_id, fp, kind) is not None:
         return {"status": "ready"}
     if cur.get("status") == "failed":
         return {"status": "failed", "error": cur.get("error")}

@@ -1419,22 +1419,33 @@ def _excel_fingerprint(db: Session, project: Project) -> str:
     ])
 
 
-def _excel_build_job(project_id: int, fp: str) -> None:
-    """Worker-thread body: build the workbook on its own db session and cache it."""
+def _build_job(project_id: int, fp: str, kind: str = "excel") -> None:
+    """Worker-thread body: build the file on its own db session and cache it."""
+    builder = _build_pdf_file if kind == "pdf" else _build_excel_file
     db = SessionLocal()
     try:
         project = db.query(Project).filter(Project.id == project_id).first()
         if not project:
             raise RuntimeError("The project was deleted.")
-        data, fname, media = _build_excel_file(db, project)
-        excel_cache.put(project_id, fp, data, fname, media)
-        excel_cache.finish(project_id)
+        data, fname, media = builder(db, project)
+        excel_cache.put(project_id, fp, data, fname, media, kind)
+        excel_cache.finish(project_id, kind=kind)
     except Exception as exc:                            # noqa: BLE001 — surfaced to the user
-        logger.exception("excel: background build failed for project %s", project_id)
+        logger.exception("%s: background build failed for project %s", kind, project_id)
         msg = getattr(exc, "detail", None) or str(exc) or exc.__class__.__name__
-        excel_cache.finish(project_id, error=str(msg))
+        excel_cache.finish(project_id, error=str(msg), kind=kind)
     finally:
         db.close()
+
+
+def _prepare(db: Session, project: Project, kind: str) -> dict:
+    fp = _excel_fingerprint(db, project)
+    st = excel_cache.status(project.id, fp, kind)
+    if st["status"] in ("ready", "running"):
+        return st
+    if excel_cache.begin(project.id, kind):
+        generation_jobs.submit_task(_build_job, project.id, fp, kind)
+    return {"status": "running"}
 
 
 @router.post("/{project_id}/excel/prepare")
@@ -1444,13 +1455,7 @@ def prepare_excel(project: Project = Depends(get_owned_project), db: Session = D
     or building). The browser polls /excel/status, then downloads from /excel — so a build
     longer than the platform's ~100 s request limit no longer ends in a 504."""
     _require(may_export(_plan_holder(db, project, current_user), "excel"))
-    fp = _excel_fingerprint(db, project)
-    st = excel_cache.status(project.id, fp)
-    if st["status"] in ("ready", "running"):
-        return st
-    if excel_cache.begin(project.id):
-        generation_jobs.submit_task(_excel_build_job, project.id, fp)
-    return {"status": "running"}
+    return _prepare(db, project, "excel")
 
 
 @router.get("/{project_id}/excel/status")
@@ -1679,10 +1684,7 @@ def download_word(project: Project = Depends(get_owned_project), db: Session = D
                              headers={"Content-Disposition": f'attachment; filename="{base}.docx"'})
 
 
-@router.get("/{project_id}/pdf")
-def download_pdf(project: Project = Depends(get_owned_project), db: Session = Depends(get_db),
-                 current_user: User = Depends(get_current_user)):
-    _require(may_export(_plan_holder(db, project, current_user), "pdf"))
+def _build_pdf_file(db: Session, project: Project) -> tuple:
     """PDF of the report, rendered by LibreOffice from the SAME Word document that the
     .docx download produces — so the PDF, Word and Excel all carry identical figures."""
     from services.recalc_service import to_pdf, libreoffice_available
@@ -1696,5 +1698,35 @@ def download_pdf(project: Project = Depends(get_owned_project), db: Session = De
     except Exception as e:
         logger.exception("pdf: export failed for project %s", project.id)
         raise HTTPException(status_code=409, detail=f"PDF export failed: {e}")
-    return StreamingResponse(BytesIO(data), media_type="application/pdf",
-                             headers={"Content-Disposition": f'attachment; filename="{base}.pdf"'})
+    return data, f"{base}.pdf", "application/pdf"
+
+
+@router.post("/{project_id}/pdf/prepare")
+def prepare_pdf(project: Project = Depends(get_owned_project), db: Session = Depends(get_db),
+                current_user: User = Depends(get_current_user)):
+    """Start converting the Word report to PDF in the background — the same flow as the
+    Excel download, for the same reason (LibreOffice can outlast the request limit)."""
+    _require(may_export(_plan_holder(db, project, current_user), "pdf"))
+    return _prepare(db, project, "pdf")
+
+
+@router.get("/{project_id}/pdf/status")
+def pdf_status(project: Project = Depends(get_owned_project), db: Session = Depends(get_db),
+               current_user: User = Depends(get_current_user)):
+    _require(may_export(_plan_holder(db, project, current_user), "pdf"))
+    return excel_cache.status(project.id, _excel_fingerprint(db, project), "pdf")
+
+
+@router.get("/{project_id}/pdf")
+def download_pdf(project: Project = Depends(get_owned_project), db: Session = Depends(get_db),
+                 current_user: User = Depends(get_current_user)):
+    _require(may_export(_plan_holder(db, project, current_user), "pdf"))
+    fp = _excel_fingerprint(db, project)
+    cached = excel_cache.get(project.id, fp, "pdf")
+    if cached:
+        data, fname, media = cached
+    else:
+        data, fname, media = _build_pdf_file(db, project)
+        excel_cache.put(project.id, fp, data, fname, media, "pdf")
+    return StreamingResponse(BytesIO(data), media_type=media,
+                             headers={"Content-Disposition": f'attachment; filename="{fname}"'})
