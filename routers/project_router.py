@@ -11,6 +11,7 @@ from dependencies import (get_current_user, get_owned_project, require_project_e
                           get_strictly_owned_project)
 from services.roles import my_company_ids
 from services.entitlements import claim_generation
+from financial_engine.industry_calc.operating_models import refine_industry
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -23,6 +24,8 @@ def create_project(
     # Ownership comes from the JWT, never from the request body.
     project = Project(**data.model_dump())
     project.user_id = current_user.id
+    # A restaurant saved as "Tourism & Hospitality" would be modelled as a hotel.
+    project.industry = refine_industry(project.industry, project.sub_industry, project.title)
     db.add(project)
     db.commit()
     db.refresh(project)

@@ -107,7 +107,42 @@
         {
           "cell": "C16",
           "label": "Covers served (Year 1)",
-          "hint": "",
+          "hint": "Total dine-in covers for Year 1, a YEARLY figure. In the workbook C16 is the formula '=E16*F16*G16*H16*I16'; table turns (G16) are worked back from this figure so the two agree.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "E16",
+          "label": "Number of tables",
+          "hint": "Dine-in tables in the outlet (all outlets combined).",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "F16",
+          "label": "Average seats per table",
+          "hint": "Covers that one table seats, e.g. 4.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "G16",
+          "label": "Table turns per day",
+          "hint": "How many times a table is used in a day across all meal sessions, e.g. 2.5. Worked back from C16 when generating.",
+          "default": null,
+          "type": "number"
+        },
+        {
+          "cell": "H16",
+          "label": "Average seat occupancy (%)",
+          "hint": "Share of seats filled per turn across the year, as a 0-1 fraction, e.g. 0.6 for 60%.",
+          "default": null,
+          "type": "percent"
+        },
+        {
+          "cell": "I16",
+          "label": "Operating days per year",
+          "hint": "Days the outlet is open in a year, e.g. 360.",
           "default": null,
           "type": "number"
         },

@@ -439,6 +439,33 @@ def get_operating_model(industry_type) -> Optional[OperatingModel]:
     return _MODELS.get("other")
 
 
+# A restaurant routinely arrives as "Tourism & Hospitality" — the industry picker had no
+# restaurant entry and its hospitality card listed "Restaurant chain" as an example — so
+# a pure-veg restaurant was modelled on room-nights × ARR. The sub-industry/title still
+# say what the business is; these words decide it, unless it also names lodging (a
+# "Boutique Hotel & Restaurant" is a hotel).
+_RESTAURANT_WORDS = ("restaurant", "cafe", "dhaba", "bakery", "cloudkitchen",
+                     "eatery", "bistro", "diner", "foodcourt", "canteen", "finedining",
+                     "multicuisine", "foodbeverage", "foodandbeverage", "qsr")
+_LODGING_WORDS = ("hotel", "resort", "lodge", "guesthouse", "homestay", "hostel", "motel",
+                  "roomnight", "accommodation")
+
+
+def refine_industry(industry, *details) -> str:
+    """The industry to store for a NEW project: `industry` unchanged, except a hospitality
+    industry whose details (sub-industry, title) describe a restaurant and no lodging,
+    which becomes the restaurant model's display name."""
+    m = get_operating_model(industry)
+    if not m or m.key != "hotel":
+        return industry
+    text = _fold(" ".join(str(d or "") for d in details))
+    if any(w in text for w in _LODGING_WORDS):
+        return industry
+    if any(_fold(w) in text for w in _RESTAURANT_WORDS):
+        return _MODELS["restaurant"].display_name
+    return industry
+
+
 def family_of(industry_type) -> str:
     """"capacity" or "volume_price"; "" only when no industry was given at all.
 

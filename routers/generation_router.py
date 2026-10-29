@@ -464,7 +464,7 @@ def _reconcile_all(answers: dict, project: Project, template=None) -> dict:
                                                reconcile_streams, reconcile_operating_costs,
                                                reconcile_drivers, reconcile_existing_loan,
                                                relabel_streams, reconcile_headcount,
-                                               reconcile_gestation)
+                                               reconcile_gestation, reconcile_covers_drivers)
     # First: without numeric year/month drivers every projected cell evaluates to
     # #VALUE!, and nothing downstream can be judged.
     answers = reconcile_drivers(answers, project)
@@ -503,6 +503,9 @@ def _reconcile_all(answers: dict, project: Project, template=None) -> dict:
         logger.warning("reconcile: volume still moving after %d passes (now %s) — the "
                        "guards are fighting each other on this project", _SCALE_PASSES,
                        answers.get("Assumptions!C16"))
+    # After the volume has settled: a restaurant's covers cell is a formula over tables,
+    # seats, turns, occupancy and days, which must multiply out to the settled figure.
+    answers = reconcile_covers_drivers(answers, project, template)
     # Text only, and safe anywhere after the streams exist: it renames those four rows in
     # the industry's own vocabulary when the industry is using a borrowed workbook.
     answers = relabel_streams(answers, project)

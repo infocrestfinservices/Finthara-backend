@@ -38,6 +38,16 @@ logger = logging.getLogger("template_fill")
 _REQUIRED_PARTS = ("[Content_Types].xml", "_rels/.rels", "xl/workbook.xml", "xl/_rels/workbook.xml.rels")
 
 
+# Input cells that are FORMULAS in a given template. They stay in `answers` — the
+# reconcile chain and the summaries read them — but are never written, since a value
+# would replace the formula. Restaurant covers (C16) = tables x seats x turns x
+# occupancy x days; reconcile_covers_drivers keeps E16:I16 equal to the answer.
+_FORMULA_INPUTS = {
+    "cma_food_beverage_restaurant_covers_served_average_order_value_898c85e2":
+        {"Assumptions!C16"},
+}
+
+
 def field_key(sheet: str, cell: str) -> str:
     return f"{sheet}!{cell}"
 
@@ -206,8 +216,9 @@ def fill_template(purpose_key: str, template_id: str, answers: dict,
 
         # Group the target cells by the sheet XML part they live in.
         edits = {}  # sheet_xml_path -> list of (cell_ref, kind, value)
+        formula_inputs = _FORMULA_INPUTS.get(template_id, ())
         for key, raw in (answers or {}).items():
-            if "!" not in key:
+            if "!" not in key or key in formula_inputs:
                 continue
             sheet, cell = key.rsplit("!", 1)
             spath = name_to_path.get(sheet)

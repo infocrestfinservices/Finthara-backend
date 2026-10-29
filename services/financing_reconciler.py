@@ -427,9 +427,14 @@ def _monthly_fixed_total(out: dict) -> float:
     one), so it sums the headcount x rate product for EVERY registered template's cell
     pair (see _HEADCOUNT_CELLS_BY_TEMPLATE) rather than assuming the universal template's
     D32/E32 — a real project's answers only ever populate one such pair, so this is exact,
-    not a double-count, and stays correct as more templates gain the formula."""
+    not a double-count, and stays correct as more templates gain the formula.
+
+    Each DISTINCT pair is counted once: the 10 industry templates all share E32/F32, and
+    iterating the registry's values counted that one wage bill 10 times. reconcile_scale
+    then saw a loss and raised the volume, which raised the wages pegged to revenue, and
+    so on — a restaurant's 60,000 covers came out as 10 lakh."""
     total = sum(_num(out.get(c)) or 0.0 for c in _MONTHLY_FIXED)
-    for headcount_cell, avg_cost_cell in _HEADCOUNT_CELLS_BY_TEMPLATE.values():
+    for headcount_cell, avg_cost_cell in set(_HEADCOUNT_CELLS_BY_TEMPLATE.values()):
         hc = _num(out.get(headcount_cell)) or 0.0
         avg_cost = _num(out.get(avg_cost_cell)) or 0.0
         total += hc * avg_cost
@@ -1288,6 +1293,73 @@ def reconcile_headcount(answers: dict, project, template=None) -> dict:
     # the formula stands. Safe here specifically because `cells` above already
     # confirmed this template has the formula.
     out.pop("Assumptions!C32", None)
+    return out
+
+
+# Templates whose covers cell (C16) is the FORMULA '=E16*F16*G16*H16*I16' — tables x
+# seats per table x table turns per day x occupancy x operating days — so a banker sees
+# how the covers figure was built rather than one bare annual number.
+_COVERS_DRIVER_TEMPLATES = {
+    "cma_food_beverage_restaurant_covers_served_average_order_value_898c85e2",
+}
+_TABLES, _SEATS, _TURNS, _OCCUPANCY, _DAYS = (
+    "Assumptions!E16", "Assumptions!F16", "Assumptions!G16", "Assumptions!H16",
+    "Assumptions!I16")
+# A typical Indian dine-in outlet, used only where the AI/client left a driver blank.
+_DEFAULT_SEATS = 4
+_DEFAULT_TURNS = 2.0
+_DEFAULT_OCCUPANCY = 0.60
+_DEFAULT_DAYS = 360
+# Beyond this the covers figure needs more sittings than a dining room really gets.
+_MAX_REALISTIC_TURNS = 5.0
+
+
+def reconcile_covers_drivers(answers: dict, project, template=None) -> dict:
+    """Make tables x seats x turns x occupancy x days equal the covers figure (C16).
+
+    C16 is still the number the AI and the scale guard decide — every other guard sizes
+    off it — so this runs after them and leaves the volume alone. Tables, seats,
+    occupancy and days are the outlet's facts (the client's or the AI's); table turns
+    are the soft driver, so they are worked back from the covers. With no table count,
+    one is derived at the default turns. C16 is then set to the product of the rounded
+    drivers so the answer and the workbook formula agree exactly.
+
+    A no-op on any template without the formula (see _COVERS_DRIVER_TEMPLATES)."""
+    if not isinstance(answers, dict):
+        return answers
+    if (template or {}).get("id") not in _COVERS_DRIVER_TEMPLATES:
+        return answers
+    covers = _num(answers.get(_CAPACITY))
+    if not covers or covers <= 0:
+        return answers
+    out = dict(answers)
+    seats = _num(out.get(_SEATS))
+    if not seats or seats <= 0:
+        seats = _DEFAULT_SEATS
+    occupancy = _num(out.get(_OCCUPANCY))
+    if occupancy and 1 < occupancy <= 100:      # "60" meant 60%
+        occupancy /= 100.0
+    if not occupancy or not 0 < occupancy <= 1:
+        occupancy = _DEFAULT_OCCUPANCY
+    days = _num(out.get(_DAYS))
+    if not days or not 1 <= days <= 366:
+        days = _DEFAULT_DAYS
+    days = int(round(days))
+    tables = _num(out.get(_TABLES))
+    if not tables or tables <= 0:
+        turns_guess = _num(out.get(_TURNS)) or _DEFAULT_TURNS
+        tables = covers / (seats * turns_guess * occupancy * days)
+    tables = max(1, int(round(tables)))
+    turns = round(covers / (tables * seats * occupancy * days), 2) or 0.01
+    out.update({_TABLES: tables, _SEATS: seats, _TURNS: turns,
+                _OCCUPANCY: occupancy, _DAYS: days})
+    out[_CAPACITY] = round(tables * seats * turns * occupancy * days, 2)
+    if turns > _MAX_REALISTIC_TURNS:
+        logger.warning("covers: %.0f covers on %d tables x %s seats needs %.2f table turns "
+                       "a day — more than a dining room usually gets", covers, tables,
+                       seats, turns)
+    logger.info("covers: %d tables x %s seats x %.2f turns x %.0f%% x %d days = %.0f",
+                tables, seats, turns, occupancy * 100, days, out[_CAPACITY])
     return out
 
 
