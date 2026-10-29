@@ -881,12 +881,14 @@ def _cover(doc, config, project):
     # Industry artwork fills the empty lower half of the cover. It is drawn in the
     # report's own palette and anchored to the bottom of the title column, so it reads
     # as part of the cover rather than a picture dropped onto it.
+    # The PDF is built from this same document but carries no cover photo.
     art = None
-    try:
-        from services.cover_art import cover_art
-        art = cover_art(project.get("industry"), project)
-    except Exception:
-        logger.warning("cover art unavailable", exc_info=True)
+    if not project.get("no_cover_art"):
+        try:
+            from services.cover_art import cover_art
+            art = cover_art(project.get("industry"), project)
+        except Exception:
+            logger.warning("cover art unavailable", exc_info=True)
     if art:
         _bottom_rule(body.add_paragraph(), color="D9D9E6", size=4)
         holder = body.add_paragraph()

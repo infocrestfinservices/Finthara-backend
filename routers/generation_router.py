@@ -1633,10 +1633,11 @@ def _build_excel_file(db: Session, project: Project) -> tuple:
     return data, f"{_slug(project.title)}_financial_model.xlsx", XLSX_MIME
 
 
-def _build_word_report(project: Project, db: Session):
+def _build_word_report(project: Project, db: Session, cover_art: bool = True):
     """The Word report bytes + base filename. For an uploaded Word (.docx) template
     this fills its {{placeholders}}; otherwise it builds the narrative report from the
-    stored model (whose KPIs are the server-recalculated, consistent values)."""
+    stored model (whose KPIs are the server-recalculated, consistent values).
+    cover_art=False leaves out the cover photo (the PDF has none)."""
     purpose_key = resolve_purpose(project.purpose, project.financial_format)
     answers = _stored_answers(db, project)
     tpurpose, template = _resolve_template(purpose_key, answers, project.industry, project.purpose,
@@ -1725,6 +1726,7 @@ def _build_word_report(project: Project, db: Session):
     pdict = _project_dict(project, answers)
     pdict["branding"] = _branding(db, project)      # logo bytes + brand colour
     pdict["section_inserts"] = _section_inserts(answers)
+    pdict["no_cover_art"] = not cover_art
     data = build_word(model, purpose_key, pdict)
     return data, f"{_slug(project.title)}_{purpose_key}"
 
@@ -1751,7 +1753,7 @@ def _build_pdf_file(db: Session, project: Project) -> tuple:
             status_code=409,
             detail="PDF export needs LibreOffice on the server (set LIBREOFFICE_PATH).")
     try:
-        word, base = _build_word_report(project, db)
+        word, base = _build_word_report(project, db, cover_art=False)
         data = to_pdf(word, "docx")
     except Exception as e:
         logger.exception("pdf: export failed for project %s", project.id)
