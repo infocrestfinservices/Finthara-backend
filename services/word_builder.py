@@ -542,7 +542,7 @@ def _caption_list(doc):
     return out
 
 
-def _list_block(doc, heading, col_label, rows, bold_top=True):
+def _list_block(doc, heading, col_label, rows, bold_top=True, note=None):
     """One of the three front-matter lists, drawn as a two-column table.
 
     `rows` is [(level, text, page, anchor)]; a page of None prints blank, which is what the
@@ -560,6 +560,13 @@ def _list_block(doc, heading, col_label, rows, bold_top=True):
     hr.font.color.rgb = INDIGO
     hr.font.name = "Calibri"
     _bottom_rule(h)
+    if note:
+        n = doc.add_paragraph()
+        n.paragraph_format.space_after = Pt(8)
+        nr = n.add_run(note)
+        nr.italic = True
+        nr.font.size = Pt(9)
+        nr.font.color.rgb = GREY
 
     table = doc.add_table(rows=1, cols=2)
     _borders(table)
@@ -613,7 +620,13 @@ def _toc_pages(doc, entries=None, figures=None, tables=None):
     N: …" / "Table N: …" captions under each chart/table located for their own numbering,
     and callers still pass them through.
     """
-    _list_block(doc, "Table of Contents", "Section", entries)
+    _list_block(doc, "Table of Contents", "Section", entries, note=TOC_LINK_NOTE)
+
+
+# Word follows a link only on Ctrl + Click — a per-user Word setting the .docx cannot
+# override — so the contents says so. A PDF viewer follows it on a plain click.
+TOC_LINK_NOTE = ("Tip: click a section to jump to it. In Microsoft Word, hold Ctrl "
+                 "and click.")
 
 
 def _heading_list(doc):

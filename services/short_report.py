@@ -960,7 +960,7 @@ def _short_toc(doc, pages):
     the long report's margins, and this document has its own. The look and the link
     mechanism are shared; only the width differs.
     """
-    from services.word_builder import _internal_link
+    from services.word_builder import _internal_link, TOC_LINK_NOTE
     h = doc.add_paragraph()
     h.paragraph_format.page_break_before = True
     h.paragraph_format.space_after = Pt(10)
@@ -974,6 +974,10 @@ def _short_toc(doc, pages):
     nr = note.add_run("An indicative overview to help decide whether this project is worth "
                       "taking further — not the full CMA submission. Every figure is read "
                       "from the same financial model as the full report.")
+    nr.italic = True
+    nr.font.size = Pt(9)
+    nr.font.color.rgb = GREY
+    nr = note.add_run(" " + TOC_LINK_NOTE)
     nr.italic = True
     nr.font.size = Pt(9)
     nr.font.color.rgb = GREY
