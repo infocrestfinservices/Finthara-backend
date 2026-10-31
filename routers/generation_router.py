@@ -1280,6 +1280,16 @@ def _run_generation(db: Session, project: Project, req: GenerateRequest, prog=No
                 market_segments = extract_market_segments(recalc) or None
                 statement_tables = extract_statement_tables(recalc) or None
                 key_assumptions = extract_key_assumptions(recalc) or None
+                if str(template.get("id") or "").startswith("feasibility_study_all_industries_"):
+                    # The Feasibility workbook keeps money in Rs lakh on sheets of its own;
+                    # the readers above look for the CMA sheets and take rupees, so they
+                    # find nothing or a figure 1e5 too small. Read it in its own terms.
+                    from services import feasibility_report as frep
+                    excel_summary = frep.financial_summary(recalc) or None
+                    statement_tables = frep.statement_tables(recalc) or None
+                    key_assumptions = frep.key_assumptions(recalc) or None
+                    real_kpis = frep.real_kpis(recalc) or None
+                    consistency = (consistency or []) + frep.consistency_checks(recalc)
                 # NOTE: "WC & CC-OD Limit" C5/C6/C8/C12/C13 are LIVE FORMULAS in the
                 # current template (=Form_IV_CA_CL!C14 etc.) — they must never be seeded
                 # with static values here. A previous extract_wc_seed() call used to do
