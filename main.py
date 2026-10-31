@@ -27,6 +27,7 @@ from routers.invoice_router import router as invoice_router
 from routers.profile_router import router as profile_router
 from routers.team_router import router as team_router
 from routers.contact_router import router as contact_router
+from routers.blog_router import public as blog_router, admin as blog_admin_router, seed_blog_posts
 from routers.engine_test_router import router as engine_test_router  # dev only
 
 IS_PRODUCTION = settings.ENV.strip().lower() == "production"
@@ -49,8 +50,13 @@ from models.extra_seat_model import ExtraSeat  # noqa: F401  (paid team seats)
 # Background report-generation jobs — same reason (only referenced inside function bodies).
 from models.generation_job_model import GenerationJob  # noqa: F401
 
+# Blog posts and images (blog_router imports these too; listed here for the same reason).
+from models.blog_model import BlogPost, BlogImage  # noqa: F401
+
 # Create all database tables on startup (Neon / Supabase Fix)
 Base.metadata.create_all(bind=engine)
+# The launch blog posts, written once into an empty blog table.
+seed_blog_posts()
 
 # Columns added to models after their table already existed — create_all above never alters
 # an existing table, so these need an explicit ALTER TABLE. See database.ensure_columns.
@@ -155,6 +161,8 @@ app.include_router(invoice_router)
 app.include_router(profile_router)
 app.include_router(team_router)
 app.include_router(contact_router)
+app.include_router(blog_router)
+app.include_router(blog_admin_router)
 
 if not IS_PRODUCTION:
     app.include_router(engine_test_router)

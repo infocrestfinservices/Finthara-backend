@@ -1,0 +1,337 @@
+[
+  {
+    "slug": "what-is-a-project-report",
+    "title": "What Is a Project Report and Why Does Your Bank Ask for One?",
+    "category": "Loan Basics",
+    "highlight": "Project Report",
+    "author": "Finthara Team",
+    "excerpt": "New to business loans? Learn what a project report is, what banks look for in it, and how to prepare a bank-ready report in minutes.",
+    "keywords": "project report for bank loan, business loan project report, DPR for MSME, how to make project report",
+    "tags": [
+      "ProjectReport",
+      "BusinessLoan",
+      "MSME",
+      "StartupIndia",
+      "SmallBusiness",
+      "LoanApplication",
+      "Entrepreneurship",
+      "Finthara"
+    ],
+    "publish_date": "2026-10-30",
+    "cover_file": "blog1-what-is-a-project-report.png",
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "You have a business idea, a location in mind and a rough budget. Then the bank manager asks for a project report, and suddenly the loan feels a long way off. The good news: a project report is simply your business plan written in the language a lender understands."
+      },
+      {
+        "type": "heading",
+        "text": "What a project report actually contains"
+      },
+      {
+        "type": "list",
+        "items": [
+          "**Business overview:** what you will do, where, and who your customers are.",
+          "**Project cost:** land, building, machinery, pre-operative expenses and working capital.",
+          "**Means of finance:** how much is your contribution and how much is the loan.",
+          "**Financial projections:** 5-year profit and loss, cash flow and balance sheet.",
+          "**Key ratios:** DSCR, current ratio, break-even and payback period."
+        ]
+      },
+      {
+        "type": "heading",
+        "text": "Why banks insist on it"
+      },
+      {
+        "type": "paragraph",
+        "text": "A lender is not only judging your idea. It wants evidence that the business can generate enough cash to repay the loan on time. The report is how the bank tests that evidence, so numbers that do not tie together, or ratios that miss the bank's benchmarks, are the most common reasons applications get sent back."
+      },
+      {
+        "type": "heading",
+        "text": "Doing it the faster way"
+      },
+      {
+        "type": "paragraph",
+        "text": "Traditionally, a project report meant weeks of back-and-forth with a consultant and a hefty fee. With Finthara, you describe your business in plain English, answer a few smart questions, and the AI builds the financial model, checks the ratios and formats everything in the structure your bank expects. You download it as a PDF, an editable Word file or a live Excel model."
+      },
+      {
+        "type": "cta",
+        "text": "Ready to apply? Create your first bank-ready project report on Finthara today.",
+        "label": "Create Report",
+        "to": "/create"
+      }
+    ]
+  },
+  {
+    "slug": "cma-data-explained",
+    "title": "CMA Data Explained: The Format Indian Banks Expect",
+    "category": "Bank Formats",
+    "highlight": "CMA Data",
+    "author": "Finthara Team",
+    "excerpt": "CMA data is a must for most business loans in India. Here is what it includes, why banks rely on it, and how to prepare it without errors.",
+    "keywords": "CMA data format, CMA report for bank loan, credit monitoring arrangement, working capital loan India",
+    "tags": [
+      "CMAData",
+      "WorkingCapital",
+      "BankLoan",
+      "MSMEIndia",
+      "CharteredAccountant",
+      "TermLoan",
+      "FinancialPlanning",
+      "Finthara"
+    ],
+    "publish_date": "2026-10-23",
+    "cover_file": "blog2-cma-data-explained.png",
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "If you have applied for a term loan or a cash credit limit in India, you have probably heard the term CMA data. CMA stands for Credit Monitoring Arrangement, and it is the standard set of financial statements banks use to assess how much credit a business can safely handle."
+      },
+      {
+        "type": "heading",
+        "text": "What goes into CMA data"
+      },
+      {
+        "type": "list",
+        "items": [
+          "Past and projected operating statement (sales, costs and profit).",
+          "Analysis of the balance sheet (assets and liabilities, year by year).",
+          "Comparative statement of current assets and current liabilities.",
+          "Calculation of maximum permissible bank finance (MPBF) for working capital.",
+          "Fund flow statement and key ratio analysis."
+        ]
+      },
+      {
+        "type": "heading",
+        "text": "Why it trips people up"
+      },
+      {
+        "type": "paragraph",
+        "text": "CMA data is not hard because the concepts are complex. It is hard because every figure has to reconcile across several statements. Change the sales assumption in one sheet, and inventory, receivables, working capital and ratios all have to move with it. One mismatch and the credit officer will ask you to redo the file."
+      },
+      {
+        "type": "heading",
+        "text": "Getting it right the first time"
+      },
+      {
+        "type": "paragraph",
+        "text": "Finthara generates CMA data in the precise structure Indian banks require for project and working-capital loans, so there is no manual reformatting. Every figure is checked to tie back to the underlying workbook, and you get the live Excel file so your CA can review or tweak any assumption."
+      },
+      {
+        "type": "cta",
+        "text": "Skip the spreadsheet headache. Generate bank-format CMA data with Finthara.",
+        "label": "Create Report",
+        "to": "/create"
+      }
+    ]
+  },
+  {
+    "slug": "dscr-current-ratio-payback",
+    "title": "DSCR, Current Ratio and Payback: The Numbers Banks Check Before Saying Yes",
+    "category": "Financial Ratios",
+    "highlight": "DSCR",
+    "author": "Finthara Team",
+    "excerpt": "Learn the key ratios banks check before approving a business loan, including DSCR, current ratio and payback period, and how to improve them.",
+    "keywords": "DSCR meaning, debt service coverage ratio, current ratio bank loan, payback period, loan approval ratios",
+    "tags": [
+      "DSCR",
+      "FinancialRatios",
+      "LoanApproval",
+      "BusinessFinance",
+      "MSME",
+      "CreditAnalysis",
+      "SmallBusinessTips",
+      "Finthara"
+    ],
+    "publish_date": "2026-10-16",
+    "cover_file": "blog3-dscr-current-ratio-payback.png",
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "Two businesses can ask for the same loan amount and get very different answers. Often, the difference comes down to a handful of ratios. Understanding them before you apply puts you in control of the conversation."
+      },
+      {
+        "type": "heading",
+        "text": "1. Debt Service Coverage Ratio (DSCR)"
+      },
+      {
+        "type": "paragraph",
+        "text": "DSCR compares the cash your business generates with the loan instalments (principal plus interest) it must pay. A DSCR of 1.5 means you earn ₹1.50 for every ₹1 of debt due. Lenders generally want this comfortably above 1, and many set a minimum around 1.25 or higher."
+      },
+      {
+        "type": "heading",
+        "text": "2. Current Ratio"
+      },
+      {
+        "type": "paragraph",
+        "text": "Current assets divided by current liabilities. It shows whether you can meet short-term obligations. Banks commonly look for roughly 1.33 or better for working-capital lending."
+      },
+      {
+        "type": "heading",
+        "text": "3. Payback Period and IRR"
+      },
+      {
+        "type": "paragraph",
+        "text": "How many years it takes to recover the investment, and the return the project earns. A shorter payback and a healthy IRR signal lower risk."
+      },
+      {
+        "type": "heading",
+        "text": "How to strengthen your numbers"
+      },
+      {
+        "type": "list",
+        "items": [
+          "Use realistic, sector-appropriate sales and cost assumptions.",
+          "Consider a slightly longer repayment tenure or moratorium to ease early-year DSCR.",
+          "Increase your own contribution to reduce debt."
+        ]
+      },
+      {
+        "type": "paragraph",
+        "text": "Finthara calculates DSCR, current ratio, IRR and payback automatically, validates them against bank benchmarks and shows them as interactive charts, so you can spot a weak ratio and fix it before the bank does."
+      },
+      {
+        "type": "cta",
+        "text": "See your ratios before your banker does. Try Finthara now.",
+        "label": "Try Finthara",
+        "to": "/create"
+      }
+    ]
+  },
+  {
+    "slug": "pmegp-mudra-project-report",
+    "title": "Applying Under PMEGP or Mudra? Here Is How to Prepare Your Project Report",
+    "category": "Government Schemes",
+    "highlight": "PMEGP or Mudra",
+    "author": "Finthara Team",
+    "excerpt": "Planning to apply for a PMEGP or Mudra loan? Learn what your project report must include and the mistakes that delay approval.",
+    "keywords": "PMEGP project report, Mudra loan project report, government loan scheme India, CGTMSE, MSME subsidy",
+    "tags": [
+      "PMEGP",
+      "MudraLoan",
+      "CGTMSE",
+      "GovernmentSchemes",
+      "StartupIndia",
+      "MSMESubsidy",
+      "WomenEntrepreneurs",
+      "Finthara"
+    ],
+    "publish_date": "2026-10-09",
+    "cover_file": "blog4-pmegp-mudra-project-report.png",
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "Government-backed schemes such as PMEGP, Mudra and CGTMSE have helped lakhs of Indians start and grow businesses with subsidies, lower collateral requirements or credit guarantees. But every application still goes through a bank, and every bank wants a solid project report."
+      },
+      {
+        "type": "heading",
+        "text": "Schemes at a glance"
+      },
+      {
+        "type": "list",
+        "items": [
+          "**PMEGP:** a credit-linked subsidy scheme for new micro-enterprises in manufacturing and services.",
+          "**Mudra (PMMY):** loans for micro and small businesses across Shishu, Kishore and Tarun categories.",
+          "**CGTMSE:** a credit guarantee that helps eligible MSMEs access loans without collateral."
+        ]
+      },
+      {
+        "type": "heading",
+        "text": "What your report must show"
+      },
+      {
+        "type": "list",
+        "items": [
+          "A clear description of the activity and why it will succeed locally.",
+          "Itemised project cost, including machinery quotes and working capital.",
+          "Your own contribution and the loan or subsidy amount requested.",
+          "Projections showing the business can repay comfortably."
+        ]
+      },
+      {
+        "type": "heading",
+        "text": "Common mistakes"
+      },
+      {
+        "type": "paragraph",
+        "text": "Overestimating first-year sales, leaving out working capital, and using a generic template that does not match the scheme's format are the top reasons files get returned. Scheme limits and subsidy rates are also revised from time to time, so always confirm the latest rules on the official portal before applying."
+      },
+      {
+        "type": "paragraph",
+        "text": "Finthara builds your report in the bank-ready CMA format and recognises your sector to pull in suitable cost structures and assumptions."
+      },
+      {
+        "type": "cta",
+        "text": "Turn your scheme application into a bank-ready report with Finthara.",
+        "label": "Create Report",
+        "to": "/create"
+      }
+    ]
+  },
+  {
+    "slug": "ai-project-report-preparation",
+    "title": "How AI Is Changing Project Report Preparation for Businesses and Consultants",
+    "category": "AI in Finance",
+    "highlight": "AI",
+    "author": "Finthara Team",
+    "excerpt": "AI is turning weeks of project-report work into minutes. See how consultants and businesses use it to produce accurate, bank-ready reports.",
+    "keywords": "AI project report generator, AI financial model, project report software, loan consultant tools, automated CMA report",
+    "tags": [
+      "AIinFinance",
+      "FinTech",
+      "ProjectReport",
+      "CharteredAccountant",
+      "LoanConsultant",
+      "Automation",
+      "MSMEFinance",
+      "Finthara"
+    ],
+    "publish_date": "2026-10-02",
+    "cover_file": "blog5-ai-project-report-preparation.png",
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "For years, preparing a detailed project report meant copying an old template, adjusting dozens of linked formulas and hoping nothing broke. For a consultant handling several clients, that could mean many hours per file. AI is changing that workflow."
+      },
+      {
+        "type": "heading",
+        "text": "From forms to conversation"
+      },
+      {
+        "type": "paragraph",
+        "text": "Instead of a 40-field form, an AI assistant can interview the business owner one question at a time: project cost, location, loan amount, preferred bank format. It adapts each question to the answers already given and fills reasonable gaps based on the industry."
+      },
+      {
+        "type": "heading",
+        "text": "What AI does well"
+      },
+      {
+        "type": "list",
+        "items": [
+          "Builds a 5-year P&L, cash flow and balance sheet in minutes.",
+          "Keeps every figure consistent across statements.",
+          "Validates ratios against lender benchmarks automatically.",
+          "Formats the output in the CMA format Indian banks expect."
+        ]
+      },
+      {
+        "type": "heading",
+        "text": "Where humans still matter"
+      },
+      {
+        "type": "paragraph",
+        "text": "AI speeds up the work, but judgement remains yours. Review the assumptions, add local market knowledge, and remember that the final lending decision always rests with the bank. The best results come when a professional uses AI to remove the repetitive work and spends the saved time advising the client."
+      },
+      {
+        "type": "paragraph",
+        "text": "Finthara gives consultants editable Word and live Excel outputs, the ability to regenerate a report with new inputs, and space to add their own photos and branding."
+      },
+      {
+        "type": "cta",
+        "text": "Prepare more reports in less time. Explore Finthara's consultant plans.",
+        "label": "See Plans",
+        "to": "/pricing"
+      }
+    ]
+  }
+]
