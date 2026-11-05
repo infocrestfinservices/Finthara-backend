@@ -868,7 +868,11 @@ def _cover(doc, config, project):
     # eyebrow label (report type) — small, tracked, above the business name
     para(config["label"].upper(), size=11, bold=True, color=INDIGO,
          align=WD_ALIGN_PARAGRAPH.LEFT, space_after=2)
-    title_p = para(title_text, size=30, bold=True, color=INK,
+    # A long name at 30 pt broke over two or three lines with a word or two left alone on
+    # the last; smaller type keeps it to one or two even lines.
+    n = len(title_text)
+    title_size = 30 if n <= 22 else 24 if n <= 34 else 20 if n <= 50 else 17
+    title_p = para(title_text, size=title_size, bold=True, color=INK,
                    align=WD_ALIGN_PARAGRAPH.LEFT, space_after=6)
     _bottom_rule(title_p, size=14)      # a solid rule directly under the title, not floating
     body.add_paragraph()
@@ -1139,6 +1143,14 @@ def _fmt_statement_value(label: str, v):
         return _pct(v)
     if "(units)" in low or "(unit)" in low:
         return f"{v:,.0f}"
+    # A row that names its own unit shows it, so a bare "12.50" is never left to be
+    # guessed at: "(%)" rows are already ×100, "(x)" rows are ratios, "(days)" are days.
+    if "(%)" in low:
+        return f"{v:,.2f}%"
+    if "(x)" in low:
+        return f"{v:,.2f}×"
+    if "(days)" in low:
+        return f"{v:,.0f} days"
     return _inr(v) if abs(v) >= 1000 else f"{v:,.2f}"
 
 

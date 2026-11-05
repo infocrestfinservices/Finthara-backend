@@ -389,9 +389,14 @@ def market_digest(text):
               ("SOM", r"\bSOM\b|Serviceable Obtainable"),
               ("Growth", r"CAGR|Growth Rate"))
     lines = [_plain(l) for l in text.split("\n")]
+    used = set()
     for label, pat in wanted:
         for i, line in enumerate(lines):
             if not re.search(pat, line, re.I) or line.startswith("|"):
+                continue
+            # "TAM / SAM / SOM" as one heading matched all three, and each then took the
+            # same paragraph beneath it — three rows saying the same thing.
+            if sum(bool(re.search(p, line, re.I)) for _, p in wanted[:3]) > 1:
                 continue
             # the figure may be on this line, or on the first real line beneath it
             body = re.split(r":\s*", line, 1)[1] if ":" in line else ""
@@ -399,7 +404,8 @@ def market_digest(text):
                 body = next((x for x in lines[i + 1:i + 4]
                              if len(x) > 20 and not x.startswith(("|", "#"))), body)
             body = body.strip(" -*")
-            if len(body) > 15:
+            if len(body) > 15 and body not in used:
+                used.add(body)
                 out["size"].append((label, body[:200]))
                 break
 
@@ -825,6 +831,19 @@ def build_short_excel(model: dict, project: dict) -> bytes:
                            "including wages, is treated as fixed.")
         n.font = Font(italic=True, size=9, color="6B728A")
 
+    # A bare "678,450" leaves the reader guessing the unit. Every amount here is in whole
+    # rupees, so each money cell carries the ₹ and each sheet says so under its title.
+    if (f.get("currency") or "INR") == "INR":
+        for sheet, note_row in ((ws, 3), (ws2, 2)):
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if cell.number_format == '#,##0':
+                        cell.number_format = '"₹"#,##0;-"₹"#,##0'
+            if sheet.cell(row=note_row, column=1).value is None:
+                sheet.cell(row=note_row, column=1,
+                           value="All amounts in ₹ (Indian Rupees), in full — not in lakh."
+                           ).font = Font(italic=True, size=9, color="6B728A")
+
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -897,8 +916,46 @@ def _w_table(doc, headers, rows, widths=None):
             for i, cm in enumerate(widths):
                 if i < len(row.cells):
                     row.cells[i].width = Cm(cm)
+    _align_figures(table)
+    _keep_table_together(table)
     doc.add_paragraph()
     return table
+
+
+# A cell that is a figure — "₹1.21 L", "48.5%", "1.42×", "62/100", "60 months (5.0 years)" —
+# reads right-aligned under a right-aligned heading; words stay on the left.
+_FIGURE = re.compile(r"^\s*[-−(]?\s*₹?\s*[\d.,]+\s*(%|×|L|Cr|/100)?\s*\)?\s*$")
+
+
+def _align_figures(table):
+    for col in range(1, len(table.columns)):
+        cells = [row.cells[col] for row in table.rows[1:]]
+        texts = [c.text.strip() for c in cells if c.text.strip() not in ("", "—")]
+        if not texts or not all(_FIGURE.match(t) for t in texts):
+            continue
+        for row in table.rows:
+            for p in row.cells[col].paragraphs:
+                p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+
+def _keep_table_together(table):
+    """A short table moves to the next page whole, its heading row with it.
+
+    Without this Word broke a three-row table after its heading, leaving the heading alone
+    at the foot of one page and its rows on the next. Every table in this report is short
+    enough to fit on a page, so none of them needs to split.
+    """
+    from docx.oxml import OxmlElement
+    rows = table.rows
+    for n, row in enumerate(rows):
+        tr_pr = row._tr.get_or_add_trPr()
+        tr_pr.append(OxmlElement("w:cantSplit"))
+        if n == 0:
+            tr_pr.append(OxmlElement("w:tblHeader"))
+        if n < len(rows) - 1:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    p.paragraph_format.keep_with_next = True
 
 
 def _shade_cell(cell, hex_fill):
@@ -953,7 +1010,7 @@ SHORT_SECTIONS = [
 _ANCHORS = {title: f"_Short{i:02d}" for i, (title, _) in enumerate(SHORT_SECTIONS, 1)}
 
 
-def _short_toc(doc, pages):
+def _short_toc(doc, pages, feasibility=False):
     """A four-line contents, linked the same way the long report's is.
 
     Deliberately not the long report's `_list_block`: that is pinned to a 17.6 cm grid for
@@ -972,8 +1029,11 @@ def _short_toc(doc, pages):
     note = doc.add_paragraph()
     note.paragraph_format.space_after = Pt(12)
     nr = note.add_run("An indicative overview to help decide whether this project is worth "
-                      "taking further — not the full CMA submission. Every figure is read "
-                      "from the same financial model as the full report.")
+                      "taking further — "
+                      + ("not the full feasibility study. " if feasibility
+                         else "not the full CMA submission. ")
+                      + "Every figure is read from the same financial model as the full "
+                        "report.")
     nr.italic = True
     nr.font.size = Pt(9)
     nr.font.color.rgb = GREY
@@ -1065,7 +1125,11 @@ def _w_market_and_feasibility(doc, f):
     report, where they have as many pages as they need; dropped in whole they ran this page
     over onto a fifth that was a fifth full.
     """
-    md, fd = f.get("market") or {}, f.get("feasibility") or {}
+    md, fd = dict(f.get("market") or {}), f.get("feasibility") or {}
+    if (f.get("currency") or "INR") == "INR" and md.get("size"):
+        # Every other figure in a rupee report is in ₹; a market line quoted in £, $ or €
+        # would put a second currency on the page.
+        md["size"] = [(k, v) for k, v in md["size"] if not re.search(r"[£$€]", v)]
     if not (md.get("size") or md.get("competitors") or fd.get("scores")):
         return False
     title, sub = SHORT_SECTIONS[0]
@@ -1161,7 +1225,8 @@ def _compose_short(model: dict, project: dict, pages: dict) -> bytes:
         logger.warning("short report: cover unavailable", exc_info=True)
 
     # ── page 2: contents ──
-    _short_toc(doc, pages)
+    feasibility = project.get("purpose") == "feasibility_study"
+    _short_toc(doc, pages, feasibility)
 
     # ── page 3: is there a market ──
     _w_market_and_feasibility(doc, f)
@@ -1227,7 +1292,9 @@ def _compose_short(model: dict, project: dict, pages: dict) -> bytes:
             obligation = sum(first_year)
             lrows.append(["What must be paid in year 1",
                           f"{_inr(obligation)}  (about {_inr(obligation / 12)} a month)"])
-    if lrows:
+    # No loan, no loan table: a project funded wholly by the promoter printed "Interest
+    # rate 0.00%" and "₹0 a month" for a loan nobody asked for.
+    if lrows and f["loan"]:
         _w_table(doc, ["What the loan costs", ""], lrows, widths=[9.5, 7.5])
     loan_note = _explain_loan(f)
     if loan_note:
@@ -1295,14 +1362,20 @@ def _compose_short(model: dict, project: dict, pages: dict) -> bytes:
     if rows:
         _w_table(doc, ["At a glance", ""], rows, widths=[10.5, 6.5])
 
-    _w_para(doc,
-            "This is a short, indicative overview to help decide whether the project is "
-            "worth taking further. Every figure is read from the same financial model as "
-            "the full report, so the numbers will not change if you ask for it — but this "
-            "document is not a bank submission. For that, generate the full report, which "
-            "carries the CMA forms, the detailed schedules and the supporting analysis a "
-            "lender requires.",
-            size=9, italic=True, colour=GREY)
+    if feasibility:
+        closing = ("This is a short, indicative overview to help decide whether the project "
+                   "is worth taking further. Every figure is read from the same financial "
+                   "model as the full feasibility study, so the numbers will not change if "
+                   "you ask for it. The full study adds the market, technical and financial "
+                   "detail, the five-year statements, break-even, sensitivity and risks.")
+    else:
+        closing = ("This is a short, indicative overview to help decide whether the project "
+                   "is worth taking further. Every figure is read from the same financial "
+                   "model as the full report, so the numbers will not change if you ask for "
+                   "it — but this document is not a bank submission. For that, generate the "
+                   "full report, which carries the CMA forms, the detailed schedules and the "
+                   "supporting analysis a lender requires.")
+    _w_para(doc, closing, size=9, italic=True, colour=GREY)
 
     buf = io.BytesIO()
     doc.save(buf)

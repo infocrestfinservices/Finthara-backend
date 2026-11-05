@@ -4,10 +4,13 @@ FROM python:3.12-slim
 # returns a 503 (see recalc_service.py / word_builder.py). fonts-liberation gives Word docs
 # metric-compatible Arial/Times substitutes so pagination matches what LibreOffice measured
 # during development (see report-polish-toc-swot memory: page numbers were measured off a
-# real LibreOffice render).
+# real LibreOffice render). The reports are set in Calibri: fonts-crosextra-carlito is its
+# metric-compatible substitute. Without it LibreOffice fell back to the wider DejaVu Sans,
+# pages ran longer than in Word, and the contents page numbers it measured came out wrong.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice \
     fonts-liberation \
+    fonts-crosextra-carlito \
     fonts-dejavu \
     && rm -rf /var/lib/apt/lists/*
 
