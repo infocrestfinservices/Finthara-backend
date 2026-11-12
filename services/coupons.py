@@ -46,6 +46,22 @@ def _plans_for(coupon) -> set[str]:
     return {p.strip().lower() for p in raw.split(",") if p.strip()}
 
 
+def plan_labels(coupon) -> str:
+    """The plan(s) a code is for, as the customer reads them on the pricing page:
+    "Entrepreneur", or "Consultant & CA" for a code covering its Monthly and Yearly billing
+    (one billing period alone keeps its suffix, so a Yearly-only code says so)."""
+    keys = [p for p in sorted(_plans_for(coupon)) if p in PLANS]
+    names = []
+    for k in keys:
+        label = PLANS[k]["label"]
+        base = label.split(" (")[0]
+        siblings = [o for o in PURCHASABLE if PLANS[o]["label"].split(" (")[0] == base]
+        name = base if all(o in keys for o in siblings) else label
+        if name not in names:
+            names.append(name)
+    return " / ".join(names)
+
+
 def compute_discount(coupon, amount: float) -> float:
     """What this coupon takes off `amount`, in rupees, rounded to paise.
 
@@ -89,8 +105,9 @@ def validate(db, code: str, plan: str, user):
         raise CouponError("That coupon has expired.")
 
     if plan not in _plans_for(coupon):
-        allowed = ", ".join(PLANS[p]["label"] for p in sorted(_plans_for(coupon)) if p in PLANS)
-        raise CouponError(f"That coupon applies to {allowed or 'other plans'}.")
+        allowed = plan_labels(coupon)
+        raise CouponError(f"{coupon.code} is valid only for the {allowed or 'other'} plan"
+                          f"{'s' if ' / ' in allowed else ''}, not {spec['label']}.")
 
     if coupon.max_redemptions is not None and coupon.used_count >= coupon.max_redemptions:
         raise CouponError("That coupon has been fully redeemed.")

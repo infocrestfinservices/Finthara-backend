@@ -510,6 +510,7 @@ def preview_coupon(req: CouponPreview, current_user: User = Depends(get_current_
         "description": coupon.description,
         "list_amount": float(spec["amount"]),
         "discount": discount, "final_amount": final,
+        "valid_for": coupon_service.plan_labels(coupon),
         "message": (f"{coupon.code} applied — ₹{discount:,.0f} off"
                     if discount else f"{coupon.code} applied"),
     }

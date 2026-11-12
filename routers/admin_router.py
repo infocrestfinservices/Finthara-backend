@@ -29,7 +29,7 @@ from models.payment_model import Payment
 from models.project_model import Project
 from models.report_model import Report
 from models.user_model import User
-from services.entitlements import (PLANS, RANK, effective_plan, expiry_for, grant_plan,
+from services.entitlements import (PLANS, PURCHASABLE, RANK, effective_plan, expiry_for, grant_plan,
                                    plan_spec)
 
 logger = logging.getLogger("admin")
@@ -304,10 +304,16 @@ def list_coupons(db: Session = Depends(get_db)):
                           func.coalesce(func.sum(CouponRedemption.discount), 0))
                    .group_by(CouponRedemption.coupon_id).all())
     now = datetime.utcnow()
-    return {"coupons": [{
+    return {
+      # The plans a new code can be issued for — what the admin picks from in the form.
+      "plans": [{"key": k, "label": v["label"], "amount": v["amount"]}
+                for k, v in PURCHASABLE.items()],
+      "coupons": [{
         "id": c.id, "code": c.code, "description": c.description,
         "kind": c.kind, "value": c.value,
         "applies_to": [p for p in (c.applies_to or "").split(",") if p],
+        "applies_to_labels": [PLANS[p]["label"] if p in PLANS else p
+                              for p in (c.applies_to or "").split(",") if p],
         "used_count": c.used_count or 0, "max_redemptions": c.max_redemptions,
         "per_user_limit": c.per_user_limit,
         "valid_from": c.valid_from.isoformat() if c.valid_from else None,
@@ -344,13 +350,18 @@ def create_coupon(body: CouponIn, db: Session = Depends(get_db),
     if db.query(Coupon).filter(Coupon.code == code).first():
         raise HTTPException(status_code=409, detail=f"{code} already exists.")
 
-    bad = [p for p in (body.applies_to or []) if p.strip().lower() not in PLANS]
+    # Every new code must name the plan(s) it is for. A code with no plan silently discounted
+    # every paid plan, and nobody could tell from the code which offer it belonged to.
+    plans = sorted({p.strip().lower() for p in (body.applies_to or []) if p.strip()})
+    if not plans:
+        raise HTTPException(status_code=400, detail="Choose the plan this coupon is for.")
+    bad = [p for p in plans if p not in PURCHASABLE]
     if bad:
-        raise HTTPException(status_code=400, detail=f"Unknown plan(s): {', '.join(bad)}")
+        raise HTTPException(status_code=400, detail=f"Not a plan on sale: {', '.join(bad)}")
 
     c = Coupon(code=code, kind=body.kind, value=body.value,
                description=body.description,
-               applies_to=",".join(p.strip().lower() for p in (body.applies_to or [])) or None,
+               applies_to=",".join(plans),
                max_redemptions=body.max_redemptions,
                per_user_limit=body.per_user_limit,
                valid_from=body.valid_from, valid_until=body.valid_until,
