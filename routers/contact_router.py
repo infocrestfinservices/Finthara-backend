@@ -80,7 +80,9 @@ def submit_contact(req: ContactRequest, request: Request):
     if req.company:                              # honeypot tripped — pretend it worked
         return {"ok": True}
 
-    ip = (request.client.host if request.client else "unknown")
+    # Behind nginx request.client is always 127.0.0.1 — every visitor shared one bucket.
+    from services.signup_guard import client_ip
+    ip = client_ip(request)
     if _throttled(ip):
         raise HTTPException(status_code=429,
                             detail="Too many messages from here. Try again later or email us directly.")

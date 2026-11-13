@@ -216,6 +216,34 @@ def _fail_orphaned_generation_jobs():
         logging.getLogger("gen_jobs").warning("startup job sweep failed", exc_info=True)
 
 
+@app.on_event("startup")
+async def _purge_unverified_accounts():
+    """Bot sign-ups never verify. Clear unverified accounts older than three days on start,
+    then every six hours (services/signup_guard.py)."""
+    import asyncio
+    import logging
+    log = logging.getLogger("signup_guard")
+
+    def run_once():
+        from database import SessionLocal
+        from services.signup_guard import purge_unverified
+        db = SessionLocal()
+        try:
+            return purge_unverified(db)
+        finally:
+            db.close()
+
+    async def loop():
+        while True:
+            try:
+                await asyncio.to_thread(run_once)
+            except Exception:
+                log.warning("unverified-account purge failed", exc_info=True)
+            await asyncio.sleep(6 * 3600)
+
+    asyncio.get_event_loop().create_task(loop())
+
+
 @app.get("/")
 def home():
     return {"message": "Backend is working"}

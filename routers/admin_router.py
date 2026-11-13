@@ -84,10 +84,16 @@ def stats(db: Session = Depends(get_db)):
 
 @router.get("/users")
 def list_users(db: Session = Depends(get_db), q: str | None = None,
-               plan: str | None = None, limit: int = Query(50, le=MAX_PAGE), offset: int = 0):
+               plan: str | None = None, limit: int = Query(50, le=MAX_PAGE), offset: int = 0,
+               verified: bool | None = None):
     """Users with the two things a plan row is meaningless without: what they are ENTITLED
-    to right now, and how much of it they have used."""
+    to right now, and how much of it they have used. `verified=true` hides the unverified
+    sign-ups (mostly bots) and `verified=false` shows only them."""
     query = db.query(User)
+    if verified is True:
+        query = query.filter(User.is_verified.is_(True))
+    elif verified is False:
+        query = query.filter(or_(User.is_verified.is_(False), User.is_verified.is_(None)))
     if q:
         like = f"%{q.strip()}%"
         query = query.filter(or_(User.email.ilike(like), User.full_name.ilike(like)))
@@ -119,7 +125,24 @@ def list_users(db: Session = Depends(get_db), q: str | None = None,
             "reports_used": counts.get(u.id, 0),
             "reports_limit": spec["reports"],
         })
-    return {"total": total, "limit": limit, "offset": offset, "users": out}
+    unverified = (db.query(func.count(User.id))
+                    .filter(or_(User.is_verified.is_(False), User.is_verified.is_(None)))
+                    .scalar() or 0)
+    return {"total": total, "limit": limit, "offset": offset, "users": out,
+            "unverified_total": unverified}
+
+
+@router.post("/users/purge-unverified")
+def purge_unverified_users(hours: int = Query(24, ge=1, le=24 * 30),
+                           db: Session = Depends(get_db),
+                           admin: User = Depends(get_admin_user)):
+    """Delete unverified sign-ups older than `hours` now, instead of waiting for the
+    automatic clean-up (three days). Accounts with anything attached are kept."""
+    from services.signup_guard import purge_unverified
+    n = purge_unverified(db, timedelta(hours=hours))
+    logger.warning("admin: %s purged %d unverified account(s) older than %dh",
+                   admin.email, n, hours)
+    return {"removed": n}
 
 
 class PlanOverride(BaseModel):

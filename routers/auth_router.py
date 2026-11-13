@@ -1,7 +1,7 @@
 import logging
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from config import settings
 from database import get_db
@@ -31,6 +31,7 @@ from services.auth_service import (
     decode_access_token,
 )
 from services import totp_service
+from services import signup_guard as guard
 from dependencies import get_current_user
 
 logger = logging.getLogger("auth")
@@ -38,10 +39,25 @@ logger = logging.getLogger("auth")
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
-async def register(request: RegisterRequest, db: Session = Depends(get_db)):
+async def register(request: RegisterRequest, http: Request, db: Session = Depends(get_db)):
     email = request.email.lower().strip()
 
+    # Bots fill this form with strangers' addresses to flood their inboxes; every mail that
+    # goes out that way is marked as spam against our domain. Per-IP and per-inbox brakes.
+    ip = guard.client_ip(http)
+    guard.throttle(f"signup-ip:{ip}", *guard.IP_SIGNUPS, guard.TOO_MANY)
+    guard.throttle(f"mail:{guard.canonical_email(email)}", *guard.EMAIL_SENDS, guard.TOO_MANY)
+
     existing = db.query(User).filter(User.email == email).first()
+    if not existing:
+        # y.a.re.v.er@gmail.com and yarever@gmail.com are one inbox. A verified account on it
+        # is "already exists"; an unverified one is the same sign-up retried, so it is reused
+        # (and moved to the address typed now) instead of a second row for one inbox.
+        same = guard.find_same_inbox(db, email)
+        if same and not same.is_deleted:
+            existing = same
+            if not same.is_verified:
+                same.email = email
     # A *verified* email can't register again; an unverified one can retry.
     if existing and existing.is_verified:
         raise HTTPException(
@@ -203,8 +219,11 @@ def verify_email(request: VerifyEmailRequest, db: Session = Depends(get_db)):
     return {"message": "Email verified successfully."}
 
 @router.post("/resend-otp")
-async def resend_otp(request: ResendOtpRequest, db: Session = Depends(get_db)):
+async def resend_otp(request: ResendOtpRequest, http: Request, db: Session = Depends(get_db)):
     email = request.email.lower().strip()
+    guard.throttle(f"mail-ip:{guard.client_ip(http)}", *guard.IP_EMAILS, guard.TOO_MANY)
+    guard.throttle(f"mail:{guard.canonical_email(email)}", *guard.EMAIL_SENDS,
+                   "Too many codes sent to this email. Please wait an hour and try again.")
     user = db.query(User).filter(User.email == email).first()
 
     if not user:
@@ -251,7 +270,8 @@ _RESET_SENT = ("If that email address has an account, we have sent a link to res
 
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
-async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+async def forgot_password(request: ForgotPasswordRequest, http: Request,
+                          db: Session = Depends(get_db)):
     """Email a reset link. Never reveals whether the address has an account.
 
     This used to RETURN the reset token in the response, so anyone who knew a customer's
@@ -260,6 +280,14 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
     token now only ever travels by email, and the answer is identical either way.
     """
     email = request.email.lower().strip()
+
+    # Over the limit gets the same reply as everything else here, so the brake cannot be used
+    # to learn anything — it just stops the mail going out.
+    if (guard.hit(f"mail-ip:{guard.client_ip(http)}", *guard.IP_EMAILS)
+            or guard.hit(f"mail:{guard.canonical_email(email)}", *guard.EMAIL_SENDS)):
+        logger.warning("auth: reset request throttled")
+        return ForgotPasswordResponse(message=_RESET_SENT)
+
     user = db.query(User).filter(User.email == email).first()
 
     if not user or user.is_deleted:
