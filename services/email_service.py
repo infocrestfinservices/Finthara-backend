@@ -230,7 +230,7 @@ def send_feedback_message(*, rating: int, purpose: str, quality: str, recommend:
             f"2. Used Finthara for: {purpose}\n"
             f"3. Report quality & accuracy: {quality}\n"
             f"4. Would recommend: {recommend}\n"
-            f"5. Their thoughts:\n{message or '(left blank)'}\n\n"
+            f"5. What they'd like us to improve:\n{message or '(left blank)'}\n\n"
             f"---\nName: {name or '(not given)'}\nEmail: {from_email or '(not given)'}\n")
     payload = {
         "from": f"{settings.FROM_NAME} <{settings.FROM_EMAIL}>",
