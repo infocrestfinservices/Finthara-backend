@@ -92,6 +92,8 @@ class Settings(BaseSettings):
     COMPANY_NAME: str = "Finthara AI"
     COMPANY_ADDRESS: str = ""
     COMPANY_EMAIL: str = "support@finthara.com"
+    # Inbox that receives the footer "Feedback" form responses (the super admin's).
+    FEEDBACK_EMAIL: str = "mantri.yash2003@gmail.com"
     COMPANY_STATE: str = ""
     # Empty = NOT registered for GST. That is not a cosmetic difference: an unregistered
     # business must not charge GST and must not issue a "Tax Invoice" — it issues a Bill of

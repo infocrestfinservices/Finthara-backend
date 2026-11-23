@@ -216,6 +216,41 @@ def send_contact_message(*, name: str, from_email: str, message: str,
     return True
 
 
+def send_feedback_message(*, rating: int, purpose: str, quality: str, recommend: str,
+                          message: str, name: str | None = None,
+                          from_email: str | None = None) -> bool:
+    """Deliver a footer Feedback-form response to FEEDBACK_EMAIL (the super admin). Sync.
+    Returns False when email isn't configured. `reply_to` is set only if the user gave an
+    email, so a reply from Gmail goes straight to them."""
+    if not email_configured():
+        return False
+
+    stars = "★" * rating + "☆" * (5 - rating)
+    body = (f"1. Overall experience: {stars} ({rating}/5)\n"
+            f"2. Used Finthara for: {purpose}\n"
+            f"3. Report quality & accuracy: {quality}\n"
+            f"4. Would recommend: {recommend}\n"
+            f"5. Their thoughts:\n{message or '(left blank)'}\n\n"
+            f"---\nName: {name or '(not given)'}\nEmail: {from_email or '(not given)'}\n")
+    payload = {
+        "from": f"{settings.FROM_NAME} <{settings.FROM_EMAIL}>",
+        "to": [settings.FEEDBACK_EMAIL],
+        "subject": f"New feedback: {rating}/5 — {purpose}",
+        "text": body,
+    }
+    if from_email:
+        payload["reply_to"] = from_email
+    headers = {
+        "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    response = httpx.post(RESEND_ENDPOINT, json=payload, headers=headers,
+                          timeout=_RESEND_TIMEOUT)
+    if response.status_code >= 400:
+        raise RuntimeError(f"Resend API returned {response.status_code}: {response.text}")
+    return True
+
+
 def _team_invite_html(inviter_name: str, team_name: str, role: str, link: str,
                       days: int) -> str:
     who = inviter_name or "Someone"
