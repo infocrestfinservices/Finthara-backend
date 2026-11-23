@@ -1,29 +1,37 @@
-"""Public feedback form (footer "Feedback" link and /feedback page).
+"""Feedback form (footer "Feedback" link → /feedback page).
 
-POST /feedback — a 5-question feedback response, emailed to FEEDBACK_EMAIL (super admin)
-via Resend. Nothing is stored in the database.
+POST /feedback        — signed-in users only. Saved to the `feedback` table, then a copy is
+                        emailed to FEEDBACK_EMAIL (super admin). The email address stored is
+                        the account's own (login requires a verified email), so it cannot be
+                        a fake address typed into the form.
+GET  /admin/feedback  — super admin only: every response, newest first, plus a summary.
 
-Unauthenticated (anyone on the site can give feedback), so it uses the same honeypot +
-best-effort per-IP throttle as the contact form.
+Spam: login is required, and one account can send at most _MAX_PER_DAY responses in 24h
+(counted in the database, so a restart or a second worker does not reset it).
 """
 from __future__ import annotations
 
 import logging
-import time
+from datetime import datetime, timedelta
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
+from database import get_db
+from dependencies import get_admin_user, get_current_user
+from models.feedback_model import Feedback
+from models.user_model import User
 from services.email_service import send_feedback_message
 
 logger = logging.getLogger("feedback")
 
 router = APIRouter(prefix="/feedback", tags=["Feedback"])
+admin_router = APIRouter(prefix="/admin/feedback", tags=["Admin"])
 
-_HITS: dict[str, list[float]] = {}
-_WINDOW_SEC = 3600
-_MAX_PER_WINDOW = 5
+_MAX_PER_DAY = 3
 
 # Must match the option lists in frontend/src/components/FeedbackForm.jsx.
 Purpose = Literal["CMA / Bank Loan", "Feasibility Study", "Short Project Report", "Just exploring"]
@@ -31,31 +39,23 @@ Quality = Literal["Excellent", "Good", "Average", "Poor"]
 Recommend = Literal["Yes", "Maybe", "No"]
 
 
-def _throttled(ip: str) -> bool:
-    now = time.time()
-    hits = [t for t in _HITS.get(ip, []) if now - t < _WINDOW_SEC]
-    hits.append(now)
-    _HITS[ip] = hits
-    if len(_HITS) > 5000:
-        _HITS.clear()
-    return len(hits) > _MAX_PER_WINDOW
-
-
 class FeedbackRequest(BaseModel):
     rating: int = Field(ge=1, le=5)
     purpose: Purpose
     quality: Quality
     recommend: Recommend
+    name: str
     message: str = ""
-    name: str | None = None
-    email: EmailStr | None = None
-    # Honeypot: hidden in the form, only bots fill it.
-    company: str | None = None
 
-    @field_validator("email", mode="before")
+    @field_validator("name")
     @classmethod
-    def _blank_email(cls, v):
-        return v or None            # "" from an untouched optional field → None
+    def _name(cls, v: str) -> str:
+        v = (v or "").strip()
+        if not v:
+            raise ValueError("Name is required.")
+        if len(v) > 120:
+            raise ValueError("Name is too long.")
+        return v
 
     @field_validator("message")
     @classmethod
@@ -68,29 +68,58 @@ class FeedbackRequest(BaseModel):
 
 @router.post("")
 @router.post("/")
-def submit_feedback(req: FeedbackRequest, request: Request):
-    if req.company:                              # honeypot tripped — pretend it worked
-        return {"ok": True}
+def submit_feedback(req: FeedbackRequest, db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user)):
+    if not user.is_verified:
+        raise HTTPException(status_code=403, detail="Please verify your email first.")
 
-    from services.signup_guard import client_ip
-    if _throttled(client_ip(request)):
+    since = datetime.utcnow() - timedelta(hours=24)
+    recent = (db.query(func.count(Feedback.id))
+                .filter(Feedback.user_id == user.id, Feedback.created_at >= since).scalar())
+    if recent >= _MAX_PER_DAY:
         raise HTTPException(status_code=429,
-                            detail="Too many submissions from here. Please try again later.")
+                            detail="You've already sent feedback today. Thank you — please try again tomorrow.")
 
+    row = Feedback(user_id=user.id, name=req.name, email=user.email, rating=req.rating,
+                   purpose=req.purpose, quality=req.quality, recommend=req.recommend,
+                   message=req.message or None)
+    db.add(row)
+    db.commit()
+
+    # The response is already saved; a mail failure must not lose it or fail the request.
     try:
-        sent = send_feedback_message(
-            rating=req.rating, purpose=req.purpose, quality=req.quality,
-            recommend=req.recommend, message=req.message,
-            name=(req.name or "").strip() or None,
-            from_email=str(req.email) if req.email else None,
-        )
+        send_feedback_message(rating=req.rating, purpose=req.purpose, quality=req.quality,
+                              recommend=req.recommend, message=req.message,
+                              name=req.name, from_email=user.email)
     except Exception:
-        logger.exception("feedback: could not send response")
-        # 409 not 5xx: App Platform's edge replaces 5xx bodies with its own page.
-        raise HTTPException(status_code=409, detail="Couldn't send your feedback. Please try again.")
+        logger.exception("feedback: saved #%s but could not email it", row.id)
 
-    if not sent:
-        raise HTTPException(status_code=409, detail="Feedback isn't available right now.")
-
-    logger.info("feedback: %s/5 (%s)", req.rating, req.purpose)
+    logger.info("feedback: #%s %s/5 (%s) from user %s", row.id, req.rating, req.purpose, user.id)
     return {"ok": True}
+
+
+def _super_admin(admin: User = Depends(get_admin_user)) -> User:
+    # 404 like the rest of /admin, so the endpoint's existence isn't confirmed to others.
+    if not getattr(admin, "is_super_admin", False):
+        raise HTTPException(status_code=404, detail="Not found")
+    return admin
+
+
+@admin_router.get("")
+@admin_router.get("/")
+def list_feedback(db: Session = Depends(get_db), _: User = Depends(_super_admin),
+                  limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+    total = db.query(func.count(Feedback.id)).scalar() or 0
+    avg = db.query(func.avg(Feedback.rating)).scalar()
+    rows = (db.query(Feedback).order_by(Feedback.created_at.desc(), Feedback.id.desc())
+              .limit(limit).offset(offset).all())
+    return {
+        "total": total,
+        "average_rating": round(float(avg), 2) if avg is not None else None,
+        "items": [{
+            "id": f.id, "name": f.name, "email": f.email, "rating": f.rating,
+            "purpose": f.purpose, "quality": f.quality, "recommend": f.recommend,
+            "message": f.message,
+            "created_at": f.created_at.isoformat() if f.created_at else None,
+        } for f in rows],
+    }
